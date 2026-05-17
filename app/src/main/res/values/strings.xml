@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">正经人日记</string>
+    <string name="prompted_writing">提示写作</string>
+    <string name="free_writing">自由写作</string>
+    <string name="view_journals">查看过往日记</string>
+    <string name="sync_webdav">同步到WebDAV</string>
+    <string name="settings">设置</string>
+    <string name="focus_mode">专注模式</string>
+    <string name="focus_mode_desc">编辑器全屏，无干扰写作</string>
+    <string name="save">保存</string>
+    <string name="cancel">取消</string>
+    <string name="delete">删除</string>
+    <string name="done">完成</string>
+    <string name="discard">放弃</string>
+</resources>
