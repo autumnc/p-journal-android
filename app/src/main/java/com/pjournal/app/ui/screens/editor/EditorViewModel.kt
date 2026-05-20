@@ -3,6 +3,7 @@ package com.pjournal.app.ui.screens.editor
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.pjournal.app.data.BuiltInPrompts
 import com.pjournal.app.data.PreferencesManager
 import com.pjournal.app.data.repository.JournalRepository
 import com.pjournal.app.network.DeepseekApi
@@ -48,7 +49,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 val hobbies = prefs.getStringFlow("personal_hobbies").first()
                 val recentStatus = prefs.getStringFlow("recent_status").first()
 
-                when (val result = deepseekApi.generatePrompt(apiKey, experience, hobbies, recentStatus)) {
+                val seedPrompt = BuiltInPrompts.random()
+                when (val result = deepseekApi.generatePrompt(apiKey, experience, hobbies, recentStatus, seedPrompt)) {
                     is com.pjournal.app.network.ApiResult.Success -> {
                         _state.value = _state.value.copy(
                             prompt = result.content,

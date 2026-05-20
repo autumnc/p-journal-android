@@ -25,18 +25,23 @@ class DeepseekApi {
         apiKey: String,
         experience: String,
         hobbies: String,
-        recentStatus: String = ""
+        recentStatus: String = "",
+        seedPrompt: String = ""
     ): ApiResult = withContext(Dispatchers.IO) {
-        val systemPrompt = "你是一个日记写作助手。根据用户提供的个人信息（尤其是最近状态），" +
-            "随机生成一个日记提示词，以问题的形式呈现。" +
-            "提示词应优先围绕用户的最近状态展开，结合经历和爱好，帮助用户深入思考和记录。" +
-            "只生成一个问题，不要其他内容，不要加引号。"
+        val systemPrompt = "你是一个日记写作助手，帮助用户拓宽写日记的思路。" +
+            "你会收到一个随机的「种子提示词」和用户的个人信息。" +
+            "请以种子提示词为灵感起点，结合用户的最近状态、经历和爱好，" +
+            "生成一个更具发散性和启发性的日记提示。" +
+            "你的目标是激发用户从意想不到的角度思考和生活，而不是进行纯粹的问答。" +
+            "提示应当开放、有深度，能引导用户展开自由而丰富的书写。" +
+            "只生成一段提示语，不要加引号，不要以「种子提示词：」开头。"
 
         val userParts = mutableListOf<String>()
-        if (recentStatus.isNotBlank()) userParts.add("最近状态（主要参考）：$recentStatus")
+        if (seedPrompt.isNotBlank()) userParts.add("种子提示词（以此为灵感发散）：$seedPrompt")
+        if (recentStatus.isNotBlank()) userParts.add("最近状态：$recentStatus")
         if (experience.isNotBlank()) userParts.add("个人经历：$experience")
         if (hobbies.isNotBlank()) userParts.add("个人爱好：$hobbies")
-        userParts.add("请生成一个日记提示词：")
+        userParts.add("请生成一个日记提示：")
         val userMessage = userParts.joinToString("\n")
 
         val json = JSONObject().apply {
@@ -51,7 +56,7 @@ class DeepseekApi {
                     put("content", userMessage)
                 })
             })
-            put("max_tokens", 200)
+            put("max_tokens", 250)
             put("temperature", 0.8)
             put("thinking", JSONObject().apply {
                 put("type", "disabled")
