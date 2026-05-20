@@ -46,13 +46,23 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 val apiKey = prefs.getStringFlow("deepseek_api_key").first()
                 val experience = prefs.getStringFlow("personal_experience").first()
                 val hobbies = prefs.getStringFlow("personal_hobbies").first()
+                val recentStatus = prefs.getStringFlow("recent_status").first()
 
-                val result = deepseekApi.generatePrompt(apiKey, experience, hobbies)
-                _state.value = _state.value.copy(
-                    prompt = result ?: _state.value.prompt,
-                    isGeneratingPrompt = false,
-                    message = if (result != null) "AI 提示词已生成" else "生成失败，请检查网络"
-                )
+                when (val result = deepseekApi.generatePrompt(apiKey, experience, hobbies, recentStatus)) {
+                    is com.pjournal.app.network.ApiResult.Success -> {
+                        _state.value = _state.value.copy(
+                            prompt = result.content,
+                            isGeneratingPrompt = false,
+                            message = "AI 提示词已生成"
+                        )
+                    }
+                    is com.pjournal.app.network.ApiResult.Failure -> {
+                        _state.value = _state.value.copy(
+                            isGeneratingPrompt = false,
+                            message = "生成失败: ${result.error}"
+                        )
+                    }
+                }
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
                     isGeneratingPrompt = false,

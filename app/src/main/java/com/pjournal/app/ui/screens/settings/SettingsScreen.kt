@@ -283,6 +283,15 @@ fun SettingsScreen(
                 },
                 onClear = { viewModel.clearString("personal_hobbies") }
             )
+            SettingsField(
+                label = "最近状态",
+                value = state.recentStatus,
+                onClick = {
+                    editValue = state.recentStatus
+                    editingField = "recent_status" to "最近状态"
+                },
+                onClear = { viewModel.clearString("recent_status") }
+            )
 
             Spacer(modifier = Modifier.height(48.dp))
         }

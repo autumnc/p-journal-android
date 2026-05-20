@@ -30,6 +30,7 @@ class PreferencesManager(private val context: Context) {
         private val KEY_DEVICE_ID = stringPreferencesKey("device_id")
         private val KEY_PERSONAL_EXPERIENCE = stringPreferencesKey("personal_experience")
         private val KEY_PERSONAL_HOBBIES = stringPreferencesKey("personal_hobbies")
+        private val KEY_RECENT_STATUS = stringPreferencesKey("recent_status")
         private val KEY_FOCUS_MODE = booleanPreferencesKey("focus_mode")
         private val KEY_DARK_THEME = booleanPreferencesKey("dark_theme")
         private val KEY_EINK_MODE = booleanPreferencesKey("eink_mode")
@@ -52,6 +53,7 @@ class PreferencesManager(private val context: Context) {
         json.put("webdav_password", prefs[KEY_WEBDAV_PASSWORD] ?: "")
         json.put("personal_experience", prefs[KEY_PERSONAL_EXPERIENCE] ?: "")
         json.put("personal_hobbies", prefs[KEY_PERSONAL_HOBBIES] ?: "")
+        json.put("recent_status", prefs[KEY_RECENT_STATUS] ?: "")
         json.put("focus_mode", prefs[KEY_FOCUS_MODE] ?: false)
         json.put("dark_theme", prefs[KEY_DARK_THEME] ?: false)
         json.put("eink_mode", prefs[KEY_EINK_MODE] ?: false)
@@ -74,6 +76,7 @@ class PreferencesManager(private val context: Context) {
             json.optString("webdav_password").takeIf { it.isNotEmpty() }?.let { prefs[KEY_WEBDAV_PASSWORD] = it }
             json.optString("personal_experience").takeIf { it.isNotEmpty() }?.let { prefs[KEY_PERSONAL_EXPERIENCE] = it }
             json.optString("personal_hobbies").takeIf { it.isNotEmpty() }?.let { prefs[KEY_PERSONAL_HOBBIES] = it }
+            json.optString("recent_status").takeIf { it.isNotEmpty() }?.let { prefs[KEY_RECENT_STATUS] = it }
             if (json.has("focus_mode")) prefs[KEY_FOCUS_MODE] = json.getBoolean("focus_mode")
             if (json.has("dark_theme")) prefs[KEY_DARK_THEME] = json.getBoolean("dark_theme")
             if (json.has("eink_mode")) prefs[KEY_EINK_MODE] = json.getBoolean("eink_mode")
@@ -171,6 +174,7 @@ class PreferencesManager(private val context: Context) {
             "webdav_password" -> context.dataStore.data.map { it[KEY_WEBDAV_PASSWORD] ?: "" }
             "personal_experience" -> context.dataStore.data.map { it[KEY_PERSONAL_EXPERIENCE] ?: "" }
             "personal_hobbies" -> context.dataStore.data.map { it[KEY_PERSONAL_HOBBIES] ?: "" }
+            "recent_status" -> context.dataStore.data.map { it[KEY_RECENT_STATUS] ?: "" }
             else -> throw IllegalArgumentException("Unknown key: $key")
         }.let { flow ->
             // Since this is suspend, we need a different approach
@@ -190,6 +194,7 @@ class PreferencesManager(private val context: Context) {
                 "webdav_password" -> prefs[KEY_WEBDAV_PASSWORD] = value
                 "personal_experience" -> prefs[KEY_PERSONAL_EXPERIENCE] = value
                 "personal_hobbies" -> prefs[KEY_PERSONAL_HOBBIES] = value
+                "recent_status" -> prefs[KEY_RECENT_STATUS] = value
                 "webdav_sync_state" -> prefs[KEY_WEBDAV_SYNC_STATE] = value
                 "encryption_password" -> prefs[KEY_ENCRYPTION_PASSWORD] = value
                 "editor_font" -> prefs[KEY_EDITOR_FONT] = value
@@ -214,6 +219,7 @@ class PreferencesManager(private val context: Context) {
                 "webdav_sync_state" -> prefs[KEY_WEBDAV_SYNC_STATE] ?: "{}"
                 "personal_experience" -> prefs[KEY_PERSONAL_EXPERIENCE] ?: ""
                 "personal_hobbies" -> prefs[KEY_PERSONAL_HOBBIES] ?: ""
+                "recent_status" -> prefs[KEY_RECENT_STATUS] ?: ""
                 "encryption_password" -> prefs[KEY_ENCRYPTION_PASSWORD] ?: ""
                 "editor_font" -> prefs[KEY_EDITOR_FONT] ?: "default"
                 "editor_font_size" -> prefs[KEY_EDITOR_FONT_SIZE] ?: "16"
