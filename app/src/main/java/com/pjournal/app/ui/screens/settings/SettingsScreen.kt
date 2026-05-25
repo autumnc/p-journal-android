@@ -1,12 +1,19 @@
 package com.pjournal.app.ui.screens.settings
 
 import android.content.res.Configuration
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -15,6 +22,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.LightMode
@@ -26,6 +34,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -41,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -49,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.pjournal.app.data.font.ImportedFont
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +75,55 @@ fun SettingsScreen(
 
     var editingField by remember { mutableStateOf<Pair<String, String>?>(null) }
     var editValue by remember { mutableStateOf("") }
+
+    // Font import
+    val context = LocalContext.current
+    var showFontDeleteDialog by remember { mutableStateOf<ImportedFont?>(null) }
+
+    val fontPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val displayName = getDisplayName(context, uri)
+            viewModel.importFont(uri, displayName)
+        }
+    }
+
+    // Font import error dialog
+    state.fontImportError?.let { error ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearFontError() },
+            title = { Text("导入失败") },
+            text = { Text(error) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearFontError() }) {
+                    Text("确定")
+                }
+            }
+        )
+    }
+
+    // Font delete confirmation dialog
+    showFontDeleteDialog?.let { font ->
+        AlertDialog(
+            onDismissRequest = { showFontDeleteDialog = null },
+            title = { Text("删除字体") },
+            text = { Text("确定要删除「${font.name}」吗？\n已应用该字体的日记将恢复为默认字体。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteFont(font.id)
+                    showFontDeleteDialog = null
+                }) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFontDeleteDialog = null }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 
     // Edit dialog
     editingField?.let { (key, label) ->
@@ -158,14 +218,18 @@ fun SettingsScreen(
             FontSelector(
                 label = "字体",
                 current = state.editorFont,
-                options = listOf(
-                    "default" to "默认",
-                    "serif" to "衬线",
-                    "sans" to "无衬线",
-                    "mono" to "等宽"
-                ),
-                onSelect = { viewModel.saveString("editor_font", it) }
+                importedFonts = state.importedFonts,
+                onSelect = { viewModel.saveString("editor_font", it) },
+                onImport = { fontPickerLauncher.launch(arrayOf("*/*")) },
+                onDelete = { font -> showFontDeleteDialog = font }
             )
+            if (state.isImportingFont) {
+                Text(
+                    text = "正在导入...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
             Spacer(modifier = Modifier.height(12.dp))
             FontSizeSlider(
                 label = "字号",
@@ -546,37 +610,84 @@ private fun SettingsField(
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FontSelector(
     label: String,
     current: String,
-    options: List<Pair<String, String>>,
-    onSelect: (String) -> Unit
+    importedFonts: List<ImportedFont>,
+    onSelect: (String) -> Unit,
+    onImport: () -> Unit,
+    onDelete: (ImportedFont) -> Unit
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Column {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.width(48.dp)
+            fontWeight = FontWeight.Medium
         )
-        Spacer(modifier = Modifier.width(8.dp))
-        options.forEach { (key, name) ->
-            val selected = current == key
-            TextButton(
-                onClick = { onSelect(key) }
-            ) {
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { onSelect("default") }) {
                 Text(
-                    text = name,
-                    color = if (selected)
+                    text = "默认",
+                    color = if (current == "default")
                         MaterialTheme.colorScheme.primary
                     else
                         MaterialTheme.colorScheme.outline,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                    fontWeight = if (current == "default")
+                        FontWeight.Bold else FontWeight.Normal
                 )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            OutlinedButton(onClick = onImport) {
+                Icon(
+                    Icons.Outlined.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("导入字体", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+
+        if (importedFonts.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            importedFonts.forEach { font ->
+                TextButton(
+                    onClick = { onSelect(font.id) },
+                    modifier = Modifier.combinedClickable(
+                        onClick = { onSelect(font.id) },
+                        onLongClick = { onDelete(font) }
+                    )
+                ) {
+                    Text(
+                        text = font.name,
+                        color = if (current == font.id)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.outline,
+                        fontWeight = if (current == font.id)
+                            FontWeight.Bold else FontWeight.Normal
+                    )
+                }
             }
         }
     }
+}
+
+private fun getDisplayName(context: android.content.Context, uri: Uri): String {
+    var name: String? = null
+    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (nameIndex >= 0 && cursor.moveToFirst()) {
+            name = cursor.getString(nameIndex)
+        }
+    }
+    return name ?: uri.lastPathSegment ?: "未命名字体"
 }
 
 @Composable

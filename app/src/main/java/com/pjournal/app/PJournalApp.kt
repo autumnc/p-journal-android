@@ -2,6 +2,7 @@ package com.pjournal.app
 
 import android.app.Application
 import com.pjournal.app.data.PreferencesManager
+import com.pjournal.app.data.font.FontManager
 import com.pjournal.app.data.repository.JournalRepository
 import com.pjournal.app.data.sync.SyncManager
 import com.pjournal.app.network.WebDavClient
@@ -15,6 +16,7 @@ class PJournalApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        FontManager.getInstance(this)
         database = com.pjournal.app.data.db.AppDatabase.create(this)
         syncManager = SyncManager(
             prefs = PreferencesManager(this),

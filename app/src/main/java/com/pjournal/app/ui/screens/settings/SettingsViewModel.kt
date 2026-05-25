@@ -1,13 +1,17 @@
 package com.pjournal.app.ui.screens.settings
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pjournal.app.data.PreferencesManager
+import com.pjournal.app.data.font.FontManager
+import com.pjournal.app.data.font.ImportedFont
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class SettingsState(
@@ -26,11 +30,15 @@ data class SettingsState(
     val encryptionPassword: String = "",
     val editorFont: String = "default",
     val editorFontSize: String = "16",
+    val importedFonts: List<ImportedFont> = emptyList(),
+    val isImportingFont: Boolean = false,
+    val fontImportError: String? = null,
     val syncMessage: String? = null
 )
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = PreferencesManager(application)
+    private val fontManager = FontManager.getInstance(application)
 
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()
@@ -52,8 +60,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 encryptionEnabled = prefs.encryptionEnabled.first(),
                 encryptionPassword = prefs.encryptionPassword.first(),
                 editorFont = prefs.editorFont.first(),
-                editorFontSize = prefs.editorFontSize.first()
+                editorFontSize = prefs.editorFontSize.first(),
+                importedFonts = fontManager.importedFonts.value
             )
+
+            launch {
+                fontManager.importedFonts.collect { fonts ->
+                    _state.update { it.copy(importedFonts = fonts) }
+                }
+            }
         }
     }
 
@@ -117,6 +132,31 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _state.value = _state.value.copy(syncMessage = null)
     }
 
+    fun importFont(uri: Uri, displayName: String) {
+        viewModelScope.launch {
+            _state.update { it.copy(isImportingFont = true, fontImportError = null) }
+            val result = fontManager.importFont(uri, displayName)
+            _state.update { it.copy(isImportingFont = false) }
+            result.onFailure { e ->
+                _state.update { it.copy(fontImportError = e.message ?: "导入失败") }
+            }
+        }
+    }
+
+    fun deleteFont(fontId: String) {
+        viewModelScope.launch {
+            fontManager.deleteFont(fontId)
+            if (_state.value.editorFont == fontId) {
+                prefs.setString("editor_font", "default")
+                _state.update { it.copy(editorFont = "default") }
+            }
+        }
+    }
+
+    fun clearFontError() {
+        _state.update { it.copy(fontImportError = null) }
+    }
+
     private suspend fun refreshState() {
         _state.value = SettingsState(
             deepseekApiKey = prefs.getStringFlow("deepseek_api_key").first(),
@@ -133,7 +173,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             encryptionEnabled = prefs.encryptionEnabled.first(),
             encryptionPassword = prefs.encryptionPassword.first(),
             editorFont = prefs.editorFont.first(),
-            editorFontSize = prefs.editorFontSize.first()
+            editorFontSize = prefs.editorFontSize.first(),
+            importedFonts = fontManager.importedFonts.value
         )
     }
 }

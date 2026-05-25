@@ -63,6 +63,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pjournal.app.data.PreferencesManager
+import com.pjournal.app.data.font.FontManager
+import com.pjournal.app.PJournalApp
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -106,13 +108,13 @@ fun EditorScreen(
     }
 
     // Editor font preferences
+    val fontManager = remember { FontManager.getInstance(PJournalApp.instance) }
+    val importedFonts by fontManager.importedFonts.collectAsStateWithLifecycle(emptyList())
     val editorFont by prefs.editorFont.collectAsStateWithLifecycle(initialValue = "default")
     val editorFontSize by prefs.editorFontSize.collectAsStateWithLifecycle(initialValue = "16")
-    val fontFamily = when (editorFont) {
-        "serif" -> FontFamily.Serif
-        "sans" -> FontFamily.SansSerif
-        "mono" -> FontFamily.Monospace
-        else -> FontFamily.Default
+    val fontFamily = remember(editorFont, importedFonts) {
+        if (editorFont == "default") FontFamily.Default
+        else fontManager.getFontFamily(editorFont) ?: FontFamily.Default
     }
     val fontSize = editorFontSize.toIntOrNull()?.sp ?: 16.sp
 

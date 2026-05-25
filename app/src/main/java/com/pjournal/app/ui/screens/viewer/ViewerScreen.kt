@@ -27,9 +27,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pjournal.app.PJournalApp
+import com.pjournal.app.data.PreferencesManager
+import com.pjournal.app.data.font.FontManager
 import com.pjournal.app.data.repository.JournalRepository
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -47,6 +52,17 @@ fun ViewerScreen(
     var prompt by remember { mutableStateOf<String?>(null) }
     var body by remember { mutableStateOf("") }
     var isFreeWrite by remember { mutableStateOf(false) }
+
+    // Font preferences
+    val context = LocalContext.current
+    val prefs = remember { PreferencesManager(context) }
+    val fontManager = remember { FontManager.getInstance(PJournalApp.instance) }
+    val importedFonts by fontManager.importedFonts.collectAsStateWithLifecycle(emptyList())
+    val editorFont by prefs.editorFont.collectAsStateWithLifecycle(initialValue = "default")
+    val fontFamily = remember(editorFont, importedFonts) {
+        if (editorFont == "default") FontFamily.Default
+        else fontManager.getFontFamily(editorFont) ?: FontFamily.Default
+    }
 
     LaunchedEffect(filename) {
         val entry = repository.getEntry(filename)
@@ -144,7 +160,7 @@ fun ViewerScreen(
             // Body text
             Text(
                 text = body,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyLarge.copy(fontFamily = fontFamily),
                 color = MaterialTheme.colorScheme.onBackground
             )
 
