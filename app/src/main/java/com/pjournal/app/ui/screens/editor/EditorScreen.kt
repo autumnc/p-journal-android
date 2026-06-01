@@ -9,6 +9,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -54,6 +58,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -406,25 +411,31 @@ private fun PromptBanner(
     focusMode: Boolean,
     onDismiss: () -> Unit
 ) {
+    val scrollState = rememberScrollState()
+    val maxHeight = if (focusMode) 108.dp else 96.dp
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
-            .padding(if (focusMode) 12.dp else 16.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = maxHeight)
+                .verticalScroll(scrollState)
+                .pointerInput(Unit) {
+                    detectTapGestures(onLongPress = { onDismiss() })
+                }
+                .padding(if (focusMode) 12.dp else 16.dp)
         ) {
             Text(
                 text = prompt,
                 fontSize = if (focusMode) 16.sp else 15.sp,
                 color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
+                fontWeight = FontWeight.Medium
             )
-            // In focus mode, prompt stays visible (no dismiss button)
         }
     }
 }
