@@ -30,6 +30,7 @@ data class SettingsState(
     val encryptionPassword: String = "",
     val editorFont: String = "default",
     val editorFontSize: String = "16",
+    val fileFormat: String = "txt",
     val importedFonts: List<ImportedFont> = emptyList(),
     val isImportingFont: Boolean = false,
     val fontImportError: String? = null,
@@ -61,6 +62,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 encryptionPassword = prefs.encryptionPassword.first(),
                 editorFont = prefs.editorFont.first(),
                 editorFontSize = prefs.editorFontSize.first(),
+                fileFormat = prefs.fileFormat.first(),
                 importedFonts = fontManager.importedFonts.value
             )
 
@@ -112,6 +114,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setEncryptionPassword(password: String) {
         viewModelScope.launch {
             prefs.setEncryptionPassword(password)
+            refreshState()
+        }
+    }
+
+    fun setFileFormat(format: String) {
+        viewModelScope.launch {
+            prefs.setFileFormat(format)
             refreshState()
         }
     }
@@ -174,6 +183,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             encryptionPassword = prefs.encryptionPassword.first(),
             editorFont = prefs.editorFont.first(),
             editorFontSize = prefs.editorFontSize.first(),
+            fileFormat = prefs.fileFormat.first(),
             importedFonts = fontManager.importedFonts.value
         )
     }

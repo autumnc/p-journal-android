@@ -108,7 +108,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private fun mapToBrowserEntry(entity: JournalEntryEntity): BrowserEntry {
         val displayDate = try {
             val sdf = SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.getDefault())
-            val cleanName = entity.filename.removeSuffix(".txt")
+            val cleanName = entity.filename.removeSuffix(".txt").removeSuffix(".md")
             val dt = sdf.parse(cleanName)
             SimpleDateFormat("yyyy年M月d日 HH:mm", Locale.getDefault()).format(dt!!)
         } catch (e: Exception) {

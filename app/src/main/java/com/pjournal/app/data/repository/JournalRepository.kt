@@ -22,10 +22,11 @@ class JournalRepository(private val dao: JournalEntryDao) {
 
     suspend fun getDistinctDates(): List<String> = dao.getDistinctDates()
 
-    suspend fun saveEntry(text: String, prompt: String? = null): String {
+    suspend fun saveEntry(text: String, prompt: String? = null, fileFormat: String = "txt"): String {
         val timestamp = System.currentTimeMillis()
         val sdf = SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.getDefault())
-        val filename = sdf.format(Date(timestamp)) + ".txt"
+        val ext = if (fileFormat == "md") ".md" else ".txt"
+        val filename = sdf.format(Date(timestamp)) + ext
         val dateKey = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(timestamp))
 
         val chineseChars = text.count { it in '一'..'鿿' || it in '　'..'〿' || it in '＀'..'￯' }
@@ -121,9 +122,14 @@ class JournalRepository(private val dao: JournalEntryDao) {
         dao.insertEntry(entity)
     }
 
-    suspend fun updateEntry(filename: String, text: String, prompt: String? = null): String {
+    suspend fun updateEntry(filename: String, text: String, prompt: String? = null, fileFormat: String = "txt"): String {
         val existing = dao.getEntry(filename)
         val createdAt = existing?.createdAt ?: System.currentTimeMillis()
+
+        // If file format changed, use new extension for the updated filename
+        val ext = if (fileFormat == "md") ".md" else ".txt"
+        val baseName = filename.removeSuffix(".txt").removeSuffix(".md")
+        val newFilename = baseName + ext
 
         val chineseChars = text.count { it in '一'..'鿿' || it in '　'..'〿' || it in '＀'..'￯' }
         val englishWords = Regex("[a-zA-Z]+").findAll(text).count()
@@ -147,7 +153,7 @@ class JournalRepository(private val dao: JournalEntryDao) {
         val checksum = computeMd5(fullContent)
 
         val entry = JournalEntryEntity(
-            filename = filename,
+            filename = newFilename,
             content = fullContent,
             createdAt = createdAt,
             prompt = prompt,
@@ -155,8 +161,12 @@ class JournalRepository(private val dao: JournalEntryDao) {
             dateKey = dateKey,
             checksum = checksum
         )
+        // If the filename changed (format switch), delete the old entry
+        if (newFilename != filename) {
+            dao.deleteEntry(filename)
+        }
         dao.insertEntry(entry)
-        return filename
+        return newFilename
     }
 
     fun extractBody(content: String): String {

@@ -155,7 +155,7 @@ class WebDavClient {
                 href.trimEnd('/').split('/').lastOrNull() ?: continue,
                 "UTF-8"
             )
-            if (!filename.endsWith(".txt") && !filename.endsWith(".json")) continue
+            if (!filename.endsWith(".txt") && !filename.endsWith(".md") && !filename.endsWith(".json")) continue
 
             val mtimeStr = mtimeRegex.find(respXml)?.groupValues?.get(1)
             val mtime = mtimeStr?.let { parseDate(it) }

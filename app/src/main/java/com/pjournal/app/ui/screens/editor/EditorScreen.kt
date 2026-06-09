@@ -122,7 +122,6 @@ fun EditorScreen(
         else fontManager.getFontFamily(editorFont) ?: FontFamily.Default
     }
     val fontSize = editorFontSize.toIntOrNull()?.sp ?: 16.sp
-
     LaunchedEffect(useFullscreen) {
         if (useFullscreen) {
             val activity = context as? ComponentActivity
@@ -204,7 +203,7 @@ fun EditorScreen(
                         if (editFilename != null) {
                             try {
                                 val sdf = SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.getDefault())
-                                val cleanName = editFilename.removeSuffix(".txt")
+                                val cleanName = editFilename.removeSuffix(".txt").removeSuffix(".md")
                                 val dt = sdf.parse(cleanName)
                                 "编辑 · " + SimpleDateFormat("M月d日 HH:mm", Locale.getDefault()).format(dt!!)
                             } catch (_: Exception) { "编辑" }

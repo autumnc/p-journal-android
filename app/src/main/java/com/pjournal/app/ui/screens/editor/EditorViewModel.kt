@@ -76,7 +76,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     suspend fun saveEntry(text: String): String {
         val prompt = _state.value.prompt
-        val filename = repository.saveEntry(text, prompt)
+        val fileFormat = prefs.fileFormat.first()
+        val filename = repository.saveEntry(text, prompt, fileFormat)
         _state.value = _state.value.copy(prompt = null)
         triggerSync()
         return filename
@@ -84,7 +85,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     suspend fun updateEntry(filename: String, text: String) {
         val prompt = _state.value.prompt
-        repository.updateEntry(filename, text, prompt)
+        val fileFormat = prefs.fileFormat.first()
+        val newFilename = repository.updateEntry(filename, text, prompt, fileFormat)
         _state.value = _state.value.copy(prompt = null)
         triggerSync()
     }

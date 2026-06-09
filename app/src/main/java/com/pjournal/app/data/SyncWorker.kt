@@ -45,7 +45,7 @@ class SyncWorker(
             val obj = JSONObject(prevStateJson)
             val map = mutableMapOf<String, Long>()
             for (key in obj.keys()) {
-                val normalizedKey = if (key.endsWith(".txt")) key else key + ".txt"
+                val normalizedKey = if (key.endsWith(".txt") || key.endsWith(".md")) key else key + ".txt"
                 map[normalizedKey] = obj.getLong(key)
             }
             map

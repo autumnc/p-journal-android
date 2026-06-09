@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Lock
@@ -202,6 +203,11 @@ fun SettingsScreen(
             EinkModeCard(
                 enabled = state.einkMode,
                 onToggle = { viewModel.setEinkMode(it) }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FileFormatCard(
+                format = state.fileFormat,
+                onToggle = { viewModel.setFileFormat(it) }
             )
             Spacer(modifier = Modifier.height(8.dp))
             EncryptionCard(
@@ -447,6 +453,70 @@ private fun EinkModeCard(
             checked = enabled,
             onCheckedChange = onToggle
         )
+    }
+}
+
+@Composable
+private fun FileFormatCard(
+    format: String,
+    onToggle: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Outlined.Description,
+            contentDescription = null,
+            tint = if (format == "md")
+                MaterialTheme.colorScheme.primary
+            else
+                MaterialTheme.colorScheme.outline
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "文件格式",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = when (format) {
+                    "md" -> ".md — 新建日记以 Markdown 格式存储"
+                    else -> ".txt — 新建日记以纯文本格式存储"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Row {
+                TextButton(onClick = { onToggle("txt") }) {
+                    Text(
+                        text = "TXT",
+                        color = if (format == "txt")
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.outline,
+                        fontWeight = if (format == "txt")
+                            FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                TextButton(onClick = { onToggle("md") }) {
+                    Text(
+                        text = "MD",
+                        color = if (format == "md")
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.outline,
+                        fontWeight = if (format == "md")
+                            FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+            }
+        }
     }
 }
 

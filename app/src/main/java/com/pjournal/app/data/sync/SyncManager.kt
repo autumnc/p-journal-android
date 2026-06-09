@@ -91,7 +91,7 @@ class SyncManager(
                     val obj = JSONObject(prevStateJson)
                     val map = mutableMapOf<String, Long>()
                     for (key in obj.keys()) {
-                        val normalizedKey = if (key.endsWith(".txt")) key else key + ".txt"
+                        val normalizedKey = if (key.endsWith(".txt") || key.endsWith(".md")) key else key + ".txt"
                         map[normalizedKey] = obj.getLong(key)
                     }
                     map
@@ -108,7 +108,7 @@ class SyncManager(
                 var failed = 0
 
                 // Filter out config file from journal entries
-                val journalFiles = remoteFiles.filter { it.filename.endsWith(".txt") }
+                val journalFiles = remoteFiles.filter { it.filename.endsWith(".txt") || it.filename.endsWith(".md") }
 
                 val allFilenames = (localMap.keys + journalFiles.map { it.filename }).toSet()
 

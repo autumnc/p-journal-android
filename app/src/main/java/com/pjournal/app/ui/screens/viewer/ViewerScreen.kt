@@ -36,6 +36,7 @@ import com.pjournal.app.PJournalApp
 import com.pjournal.app.data.PreferencesManager
 import com.pjournal.app.data.font.FontManager
 import com.pjournal.app.data.repository.JournalRepository
+import com.pjournal.app.util.parseMarkdown
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -52,6 +53,7 @@ fun ViewerScreen(
     var prompt by remember { mutableStateOf<String?>(null) }
     var body by remember { mutableStateOf("") }
     var isFreeWrite by remember { mutableStateOf(false) }
+    var isMarkdown by remember { mutableStateOf(false) }
 
     // Font preferences
     val context = LocalContext.current
@@ -67,9 +69,10 @@ fun ViewerScreen(
     LaunchedEffect(filename) {
         val entry = repository.getEntry(filename)
         if (entry != null) {
+            isMarkdown = entry.filename.endsWith(".md")
             val dateFormatted = try {
                 val sdf = SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.getDefault())
-                val cleanName = entry.filename.removeSuffix(".txt")
+                val cleanName = entry.filename.removeSuffix(".txt").removeSuffix(".md")
                 val dt = sdf.parse(cleanName)
                 SimpleDateFormat("yyyy年M月d日 HH:mm", Locale.getDefault()).format(dt!!)
             } catch (e: Exception) {
@@ -158,11 +161,27 @@ fun ViewerScreen(
             }
 
             // Body text
-            Text(
-                text = body,
-                style = MaterialTheme.typography.bodyLarge.copy(fontFamily = fontFamily),
-                color = MaterialTheme.colorScheme.onBackground
-            )
+            if (isMarkdown) {
+                val markdownAnnotated = parseMarkdown(
+                    text = body,
+                    textColor = MaterialTheme.colorScheme.onBackground,
+                    mutedColor = MaterialTheme.colorScheme.outline,
+                    primaryColor = MaterialTheme.colorScheme.primary,
+                    accentYellow = MaterialTheme.colorScheme.tertiary,
+                    highlightBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                    baseFontSize = MaterialTheme.typography.bodyLarge.fontSize
+                )
+                Text(
+                    text = markdownAnnotated,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontFamily = fontFamily)
+                )
+            } else {
+                Text(
+                    text = body,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontFamily = fontFamily),
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
         }
