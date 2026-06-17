@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.AutoAwesome
@@ -63,12 +64,16 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pjournal.app.data.PreferencesManager
 import com.pjournal.app.data.font.FontManager
+import com.pjournal.app.util.parseMarkdownHighlight
 import com.pjournal.app.PJournalApp
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -122,6 +127,35 @@ fun EditorScreen(
         else fontManager.getFontFamily(editorFont) ?: FontFamily.Default
     }
     val fontSize = editorFontSize.toIntOrNull()?.sp ?: 16.sp
+
+    // Detect if current entry is Markdown format
+    val fileFormat by prefs.fileFormat.collectAsStateWithLifecycle(initialValue = "txt")
+    val isMarkdown = editFilename?.endsWith(".md") == true || (editFilename == null && fileFormat == "md")
+
+    // Markdown syntax highlight colors (must be read in composable context)
+    val mdTextColor = MaterialTheme.colorScheme.onBackground
+    val mdMutedColor = MaterialTheme.colorScheme.outline
+    val mdPrimaryColor = MaterialTheme.colorScheme.primary
+    val mdAccentColor = MaterialTheme.colorScheme.tertiary
+
+    val mdHighlightTransform = remember(isMarkdown, mdTextColor, mdMutedColor, mdPrimaryColor, mdAccentColor, fontSize, effectiveFocus) {
+        if (isMarkdown) {
+            val baseSize = if (effectiveFocus) 18.sp else fontSize
+            VisualTransformation { annotatedString ->
+                val highlighted = parseMarkdownHighlight(
+                    text = annotatedString.text,
+                    textColor = mdTextColor,
+                    mutedColor = mdMutedColor,
+                    primaryColor = mdPrimaryColor,
+                    accentColor = mdAccentColor,
+                    baseFontSize = baseSize
+                )
+                TransformedText(highlighted, OffsetMapping.Identity)
+            }
+        } else {
+            VisualTransformation.None
+        }
+    }
     LaunchedEffect(useFullscreen) {
         if (useFullscreen) {
             val activity = context as? ComponentActivity
@@ -327,6 +361,7 @@ fun EditorScreen(
                         lineHeight = if (effectiveFocus) 32.sp else (fontSize.value * 1.6f).sp,
                         color = MaterialTheme.colorScheme.onBackground
                     ),
+                    visualTransformation = mdHighlightTransform,
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     decorationBox = { innerTextField ->
                         Box {
