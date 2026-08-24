@@ -27,7 +27,7 @@ class DeepseekApi {
         hobbies: String,
         recentStatus: String = "",
         seedPrompt: String = ""
-    ): ApiResult = withContext(Dispatchers.IO) {
+    ): ApiResult {
         val systemPrompt = "你是一个日记写作助手，帮助用户拓宽写日记的思路。" +
             "你会收到一个随机的「种子提示词」和用户的个人信息。" +
             "请以种子提示词为灵感起点，结合用户的最近状态、经历和爱好，" +
@@ -44,6 +44,24 @@ class DeepseekApi {
         userParts.add("请生成一个日记提示：")
         val userMessage = userParts.joinToString("\n")
 
+        return postChat(apiKey, systemPrompt, userMessage, maxTokens = 250, temperature = 0.8)
+    }
+
+    suspend fun polishText(apiKey: String, text: String): ApiResult {
+        val systemPrompt = "你是日记写作助手。用户会给你一段日记中的文字，请润色它：" +
+            "保持原意、人称和语气，修正语病，让表达更通顺、自然、有感染力。" +
+            "不要改变内容主旨，不要添加原文没有的信息，不要加引号，不要加标题或开头语，" +
+            "直接输出润色后的文字。"
+        return postChat(apiKey, systemPrompt, text, maxTokens = 600, temperature = 0.7)
+    }
+
+    private suspend fun postChat(
+        apiKey: String,
+        systemPrompt: String,
+        userMessage: String,
+        maxTokens: Int,
+        temperature: Double
+    ): ApiResult = withContext(Dispatchers.IO) {
         val json = JSONObject().apply {
             put("model", "deepseek-v4-flash")
             put("messages", JSONArray().apply {
@@ -56,8 +74,8 @@ class DeepseekApi {
                     put("content", userMessage)
                 })
             })
-            put("max_tokens", 250)
-            put("temperature", 0.8)
+            put("max_tokens", maxTokens)
+            put("temperature", temperature)
             put("thinking", JSONObject().apply {
                 put("type", "disabled")
             })

@@ -1,5 +1,7 @@
 package com.pjournal.app.ui.screens.viewer
 
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,9 +27,21 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,9 +50,13 @@ import com.pjournal.app.PJournalApp
 import com.pjournal.app.data.PreferencesManager
 import com.pjournal.app.data.font.FontManager
 import com.pjournal.app.data.repository.JournalRepository
+import com.pjournal.app.network.FlomoApi
+import com.pjournal.app.ui.util.isCtrl
 import com.pjournal.app.util.parseMarkdown
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,6 +72,11 @@ fun ViewerScreen(
     var body by remember { mutableStateOf("") }
     var isFreeWrite by remember { mutableStateOf(false) }
     var isMarkdown by remember { mutableStateOf(false) }
+
+    val viewerFocusRequester = remember { FocusRequester() }
+    val scrollState = rememberScrollState()
+    val scrollScope = rememberCoroutineScope()
+    val scrollStep = with(LocalDensity.current) { 60.dp.roundToPx() }
 
     // Font preferences
     val context = LocalContext.current
@@ -112,6 +135,62 @@ fun ViewerScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewerFocusRequester.requestFocus()
+    }
+
+    val handleViewerKey: (KeyEvent) -> Boolean = { event ->
+        if (event.type != KeyEventType.KeyDown) {
+            false
+        } else {
+            when {
+                event.key == Key.Escape || event.key == Key.Q -> {
+                    onBack()
+                    true
+                }
+                event.key == Key.DirectionDown || event.key == Key.J -> {
+                    scrollScope.launch {
+                        scrollState.scrollTo((scrollState.value + scrollStep).coerceAtMost(scrollState.maxValue))
+                    }
+                    true
+                }
+                event.key == Key.DirectionUp || event.key == Key.K -> {
+                    scrollScope.launch {
+                        scrollState.scrollTo((scrollState.value - scrollStep).coerceAtLeast(0))
+                    }
+                    true
+                }
+                event.key == Key.Spacebar || event.key == Key.PageUp -> {
+                    scrollScope.launch {
+                        scrollState.scrollTo((scrollState.value - scrollState.viewportSize).coerceAtLeast(0))
+                    }
+                    true
+                }
+                event.key == Key.PageDown -> {
+                    scrollScope.launch {
+                        scrollState.scrollTo((scrollState.value + scrollState.viewportSize).coerceAtMost(scrollState.maxValue))
+                    }
+                    true
+                }
+                event.key == Key.G -> {
+                    scrollScope.launch {
+                        if (event.isShiftPressed) scrollState.scrollTo(scrollState.maxValue)
+                        else scrollState.scrollTo(0)
+                    }
+                    true
+                }
+                event.isCtrl && event.key == Key.F -> {
+                    scrollScope.launch {
+                        val msg = sendBodyToFlomo(context, body)
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -132,7 +211,10 @@ fun ViewerScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
+                .onPreviewKeyEvent { handleViewerKey(it) }
+                .focusRequester(viewerFocusRequester)
+                .focusable()
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -186,4 +268,23 @@ fun ViewerScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
+}
+
+private suspend fun sendBodyToFlomo(context: Context, body: String): String {
+    if (body.isBlank()) return "日记内容为空"
+    val prefs = PreferencesManager(context)
+    val email = prefs.getStringFlow("flomo_email").first()
+    val password = prefs.getStringFlow("flomo_password").first()
+    if (email.isBlank() || password.isBlank()) return "请先配置 Flomo 账号"
+    val flomoApi = FlomoApi()
+    var token = prefs.getStringFlow("flomo_token").first()
+    var success = flomoApi.createMemo(token, body)
+    if (!success) {
+        token = flomoApi.login(email, password) ?: ""
+        if (token.isNotBlank()) {
+            prefs.setString("flomo_token", token)
+            success = flomoApi.createMemo(token, body)
+        }
+    }
+    return if (success) "已发送到 Flomo" else "发送失败"
 }

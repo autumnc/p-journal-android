@@ -21,6 +21,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.DarkMode
@@ -68,6 +76,7 @@ fun HomeScreen(
     onFreeWrite: () -> Unit,
     onBrowse: () -> Unit,
     onSettings: () -> Unit,
+    onExit: () -> Unit = {},
     viewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory())
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -78,8 +87,21 @@ fun HomeScreen(
     var passwordInput by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf(false) }
 
+    val openBrowser: () -> Unit = {
+        if (encryptionEnabled && encryptionPassword.isNotBlank()) {
+            passwordInput = ""
+            passwordError = false
+            showPasswordGate = true
+        } else {
+            onBrowse()
+        }
+    }
+
+    val rootFocusRequester = remember { FocusRequester() }
+
     LaunchedEffect(Unit) {
         viewModel.refresh()
+        rootFocusRequester.requestFocus()
     }
 
     LaunchedEffect(state.syncMessage) {
@@ -185,6 +207,21 @@ fun HomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown) {
+                        when (event.key) {
+                            Key.P -> { onPromptWrite(null); true }
+                            Key.F -> { onFreeWrite(); true }
+                            Key.V -> if (state.totalEntries > 0) { openBrowser(); true } else false
+                            Key.W -> { viewModel.syncWebDav(); true }
+                            Key.S -> { onSettings(); true }
+                            Key.Escape, Key.Q -> { onExit(); true }
+                            else -> false
+                        }
+                    } else false
+                }
+                .focusRequester(rootFocusRequester)
+                .focusable()
                 .padding(padding)
                 .padding(horizontal = 24.dp)
                 .verticalScroll(rememberScrollState()),
@@ -248,15 +285,7 @@ fun HomeScreen(
 
             if (state.totalEntries > 0) {
                 Spacer(modifier = Modifier.height(12.dp))
-                MenuButton("查看过往日记", einkMode = einkMode, onClick = {
-                    if (encryptionEnabled && encryptionPassword.isNotBlank()) {
-                        passwordInput = ""
-                        passwordError = false
-                        showPasswordGate = true
-                    } else {
-                        onBrowse()
-                    }
-                })
+                MenuButton("查看过往日记", einkMode = einkMode, onClick = openBrowser)
             }
 
             Spacer(modifier = Modifier.height(12.dp))

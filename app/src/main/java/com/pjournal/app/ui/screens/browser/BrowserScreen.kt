@@ -19,8 +19,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
@@ -59,6 +71,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.pjournal.app.ui.util.isCtrl
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,6 +91,81 @@ fun BrowserScreen(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val horizontalPadding = if (isLandscape) 48.dp else 12.dp
+
+    val listState = rememberLazyListState()
+    var selectedIndex by remember { mutableStateOf(0) }
+    var searchFocused by remember { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
+    val rootFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        rootFocusRequester.requestFocus()
+    }
+
+    LaunchedEffect(state.entries.size) {
+        selectedIndex = 0
+    }
+
+    LaunchedEffect(selectedIndex, state.entries.size) {
+        if (state.entries.isNotEmpty()) {
+            listState.animateScrollToItem(selectedIndex.coerceIn(0, state.entries.lastIndex))
+        }
+    }
+
+    val handleBrowseKey: (KeyEvent) -> Boolean = { event ->
+        if (event.type != KeyEventType.KeyDown) {
+            false
+        } else {
+            val list = state.entries
+            val current = list.getOrNull(selectedIndex)
+            when {
+                event.isCtrl && event.key == Key.F -> {
+                    if (current != null) viewModel.sendToFlomo(current.filename)
+                    true
+                }
+                event.key == Key.Escape || (event.key == Key.Q && !searchFocused) -> {
+                    onBack()
+                    true
+                }
+                event.key == Key.Slash -> {
+                    searchFocusRequester.requestFocus()
+                    true
+                }
+                !searchFocused && list.isNotEmpty() &&
+                    (event.key == Key.DirectionDown || event.key == Key.J) -> {
+                    selectedIndex = (selectedIndex + 1).coerceAtMost(list.lastIndex)
+                    true
+                }
+                !searchFocused && list.isNotEmpty() &&
+                    (event.key == Key.DirectionUp || event.key == Key.K) -> {
+                    selectedIndex = (selectedIndex - 1).coerceAtLeast(0)
+                    true
+                }
+                !searchFocused && list.isNotEmpty() && event.key == Key.Enter -> {
+                    val target = list.getOrNull(selectedIndex)
+                    if (target != null) onViewEntry(target.filename)
+                    true
+                }
+                !searchFocused && list.isNotEmpty() && event.key == Key.G -> {
+                    selectedIndex = if (event.isShiftPressed) list.lastIndex else 0
+                    true
+                }
+                !searchFocused && list.isNotEmpty() && event.key == Key.Home -> {
+                    selectedIndex = 0
+                    true
+                }
+                !searchFocused && list.isNotEmpty() && event.key == Key.MoveEnd -> {
+                    selectedIndex = list.lastIndex
+                    true
+                }
+                !searchFocused && list.isNotEmpty() && event.key == Key.D -> {
+                    if (current != null) deleteTarget = current.filename
+                    true
+                }
+                else -> false
+            }
+        }
+    }
 
     LaunchedEffect(state.message) {
         if (state.message != null) {
@@ -126,6 +214,9 @@ fun BrowserScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .onPreviewKeyEvent { handleBrowseKey(it) }
+                .focusRequester(rootFocusRequester)
+                .focusable()
         ) {
             // Message banner
             state.message?.let { msg ->
@@ -153,7 +244,10 @@ fun BrowserScreen(
                 OutlinedTextField(
                     value = state.searchQuery,
                     onValueChange = { viewModel.search(it) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(searchFocusRequester)
+                        .onFocusChanged { searchFocused = it.isFocused },
                     placeholder = { Text("搜索...", style = MaterialTheme.typography.bodySmall) },
                     leadingIcon = {
                         Icon(Icons.Default.Search, "搜索",
@@ -259,7 +353,8 @@ fun BrowserScreen(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState
                 ) {
                     itemsIndexed(
                         items = state.entries,
@@ -267,6 +362,7 @@ fun BrowserScreen(
                     ) { index, entry ->
                         EntryRow(
                             entry = entry,
+                            isSelected = index == selectedIndex,
                             isSendingFlomo = entry.filename in state.sendingSet,
                             onClick = { onViewEntry(entry.filename) },
                             onEdit = { onEditEntry(entry.filename) },
@@ -289,6 +385,7 @@ fun BrowserScreen(
 @Composable
 private fun EntryRow(
     entry: BrowserEntry,
+    isSelected: Boolean,
     isSendingFlomo: Boolean,
     onClick: () -> Unit,
     onEdit: () -> Unit,
@@ -299,6 +396,13 @@ private fun EntryRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (isSelected) {
+                    Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                } else {
+                    Modifier
+                }
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = if (isLandscape) 4.dp else 6.dp),
         verticalAlignment = Alignment.CenterVertically

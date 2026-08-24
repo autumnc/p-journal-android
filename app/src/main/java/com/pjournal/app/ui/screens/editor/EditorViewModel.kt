@@ -36,6 +36,10 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _state.value = _state.value.copy(message = null)
     }
 
+    fun setMessage(msg: String) {
+        _state.value = _state.value.copy(message = msg)
+    }
+
     fun setInitialPrompt(prompt: String?) {
         _state.value = _state.value.copy(prompt = prompt)
     }
@@ -145,6 +149,26 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 message = "发送失败: ${e.message}"
             )
             false
+        }
+    }
+
+    suspend fun polishSelected(text: String): String? {
+        return try {
+            val apiKey = prefs.getStringFlow("deepseek_api_key").first()
+            if (apiKey.isBlank()) {
+                _state.value = _state.value.copy(message = "请先配置 Deepseek API Key")
+                return null
+            }
+            when (val result = deepseekApi.polishText(apiKey, text)) {
+                is com.pjournal.app.network.ApiResult.Success -> result.content
+                is com.pjournal.app.network.ApiResult.Failure -> {
+                    _state.value = _state.value.copy(message = "润色失败: ${result.error}")
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(message = "润色失败: ${e.message}")
+            null
         }
     }
 }

@@ -45,13 +45,25 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -61,6 +73,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pjournal.app.data.font.ImportedFont
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,6 +89,49 @@ fun SettingsScreen(
 
     var editingField by remember { mutableStateOf<Pair<String, String>?>(null) }
     var editValue by remember { mutableStateOf("") }
+
+    val settingsFocusRequester = remember { FocusRequester() }
+    val scrollState = rememberScrollState()
+    val scrollScope = rememberCoroutineScope()
+    val scrollStep = with(LocalDensity.current) { 60.dp.roundToPx() }
+
+    LaunchedEffect(Unit) {
+        settingsFocusRequester.requestFocus()
+    }
+
+    val handleSettingsKey: (KeyEvent) -> Boolean = { event ->
+        if (event.type != KeyEventType.KeyDown) {
+            false
+        } else {
+            when {
+                event.key == Key.Escape || event.key == Key.Q -> {
+                    onBack()
+                    true
+                }
+                event.key == Key.DirectionDown || event.key == Key.J -> {
+                    scrollScope.launch {
+                        scrollState.scrollTo((scrollState.value + scrollStep).coerceAtMost(scrollState.maxValue))
+                    }
+                    true
+                }
+                event.key == Key.DirectionUp || event.key == Key.K -> {
+                    scrollScope.launch {
+                        scrollState.scrollTo((scrollState.value - scrollStep).coerceAtLeast(0))
+                    }
+                    true
+                }
+                event.key == Key.Home -> {
+                    scrollScope.launch { scrollState.scrollTo(0) }
+                    true
+                }
+                event.key == Key.MoveEnd -> {
+                    scrollScope.launch { scrollState.scrollTo(scrollState.maxValue) }
+                    true
+                }
+                else -> false
+            }
+        }
+    }
 
     // Font import
     val context = LocalContext.current
@@ -187,7 +243,10 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
+                .onPreviewKeyEvent { handleSettingsKey(it) }
+                .focusRequester(settingsFocusRequester)
+                .focusable()
                 .padding(horizontal = horizontalPadding)
         ) {
             Spacer(modifier = Modifier.height(16.dp))
