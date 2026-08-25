@@ -1,14 +1,18 @@
 package com.pjournal.app.util
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextGeometricTransform
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
 
@@ -120,7 +124,8 @@ fun renderMarkdownForEditor(
     accentColor: Color,
     highlightBg: Color = Color.Transparent,
     einkMode: Boolean = false,
-    baseFontSize: androidx.compose.ui.unit.TextUnit = 16.sp
+    baseFontSize: androidx.compose.ui.unit.TextUnit = 16.sp,
+    customFontBoldBoost: Boolean = false
 ): TransformedText {
     val sourceToTransformed = IntArray(text.length + 1)
     val transformedToSource = mutableListOf<Int>()
@@ -219,6 +224,7 @@ fun renderMarkdownForEditor(
                     accentColor = accentColor,
                     highlightBg = highlightBg,
                     einkMode = einkMode,
+                    customFontBoldBoost = customFontBoldBoost,
                     sourceToTransformed = sourceToTransformed,
                     transformedToSource = transformedToSource
                 )
@@ -232,6 +238,7 @@ fun renderMarkdownForEditor(
                     accentColor = accentColor,
                     highlightBg = highlightBg,
                     einkMode = einkMode,
+                    customFontBoldBoost = customFontBoldBoost,
                     sourceToTransformed = sourceToTransformed,
                     transformedToSource = transformedToSource
                 )
@@ -357,23 +364,22 @@ private fun AnnotatedString.Builder.appendEditorRenderedInline(
     accentColor: Color,
     highlightBg: Color,
     einkMode: Boolean,
+    customFontBoldBoost: Boolean,
     sourceToTransformed: IntArray,
     transformedToSource: MutableList<Int>
 ) {
     if (start >= end) return
 
     val line = source.substring(start, end)
-    val matches = findEditorInlineMatches(line, markerColor, accentColor, highlightBg, einkMode)
-    if (matches.isEmpty()) {
-        appendMappedRange(source, start, end, baseStyle, sourceToTransformed, transformedToSource)
-        return
-    }
-
     var pos = 0
-    for (match in matches) {
-        if (pos < match.start) {
-            appendMappedRange(source, start + pos, start + match.start, baseStyle, sourceToTransformed, transformedToSource)
+    while (pos < line.length) {
+        val match = editorMatchAt(line, pos, markerColor, accentColor, highlightBg, einkMode, customFontBoldBoost)
+        if (match == null) {
+            appendMappedRange(source, start + pos, start + pos + 1, baseStyle, sourceToTransformed, transformedToSource)
+            pos++
+            continue
         }
+
         hideSourceRange(
             start + match.markerStart,
             start + match.markerEnd,
@@ -395,10 +401,6 @@ private fun AnnotatedString.Builder.appendEditorRenderedInline(
             length
         )
         pos = match.end
-    }
-
-    if (pos < line.length) {
-        appendMappedRange(source, start + pos, end, baseStyle, sourceToTransformed, transformedToSource)
     }
 }
 
@@ -448,7 +450,8 @@ private fun editorMatchAt(
     primaryColor: Color,
     accentColor: Color,
     highlightBg: Color,
-    einkMode: Boolean
+    einkMode: Boolean,
+    customFontBoldBoost: Boolean = false
 ): EditorInlineMatch? {
     val len = line.length
     val markerStyle = SpanStyle(
@@ -473,15 +476,32 @@ private fun editorMatchAt(
                     endMarkerStart = e, endMarkerEnd = e + 2,
                     end = e + 2,
                     markerStyle = markerStyle,
-                    contentStyle = if (einkMode) {
-                        SpanStyle(
-                            fontWeight = FontWeight.Black,
-                            color = Color.White,
-                            background = Color.Black
-                        )
-                    } else {
-                        SpanStyle(fontWeight = FontWeight.Bold, color = accentColor)
-                    }
+                    contentStyle = SpanStyle(
+                        fontWeight = if (einkMode) FontWeight.Black else FontWeight.Bold,
+                        fontSynthesis = FontSynthesis.All,
+                        textGeometricTransform = TextGeometricTransform(
+                            scaleX = when {
+                                customFontBoldBoost && einkMode -> 1.2f
+                                customFontBoldBoost -> 1.14f
+                                einkMode -> 1.12f
+                                else -> 1.06f
+                            }
+                        ),
+                        shadow = Shadow(
+                            color = if (einkMode) Color.Black else accentColor,
+                            offset = Offset(
+                                when {
+                                    customFontBoldBoost && einkMode -> 1.05f
+                                    customFontBoldBoost -> 0.8f
+                                    einkMode -> 0.7f
+                                    else -> 0.45f
+                                },
+                                0f
+                            ),
+                            blurRadius = 0f
+                        ),
+                        color = if (einkMode) Color.Black else accentColor
+                    )
                 )
             }
             e++
@@ -520,10 +540,10 @@ private fun editorMatchAt(
                     end = e + 2,
                     markerStyle = markerStyle,
                     contentStyle = SpanStyle(
-                        color = if (einkMode) Color.Black else accentColor,
-                        fontWeight = if (einkMode) FontWeight.Black else FontWeight.SemiBold,
-                        textDecoration = if (einkMode) TextDecoration.Underline else null,
-                        background = if (einkMode) highlightBg else highlightBg
+                        color = if (einkMode) Color.White else accentColor,
+                        fontWeight = if (einkMode) FontWeight.Bold else FontWeight.SemiBold,
+                        fontSynthesis = FontSynthesis.All,
+                        background = if (einkMode) Color.Black else highlightBg
                     )
                 )
             }
@@ -531,15 +551,14 @@ private fun editorMatchAt(
         }
     }
     // <u>underline</u>
-    if (i + 6 < len && line[i] == '<' && line[i + 1] == 'u' && line[i + 2] == '>') {
-        var e = i + 3
-        while (e + 3 < len) {
-            if (line[e] == '<' && line[e + 1] == '/' && line[e + 2] == 'u' && line[e + 3] == '>') {
+    underlineOpenEnd(line, i)?.let { openEnd ->
+        val closeStart = line.indexOf("</u>", startIndex = openEnd, ignoreCase = true)
+        if (closeStart > openEnd) {
                 return EditorInlineMatch(
-                    start = i, markerStart = i, markerEnd = i + 3,
-                    contentStart = i + 3, contentEnd = e,
-                    endMarkerStart = e, endMarkerEnd = e + 4,
-                    end = e + 4,
+                    start = i, markerStart = i, markerEnd = openEnd,
+                    contentStart = openEnd, contentEnd = closeStart,
+                    endMarkerStart = closeStart, endMarkerEnd = closeStart + 4,
+                    end = closeStart + 4,
                     markerStyle = markerStyle,
                     contentStyle = SpanStyle(
                         textDecoration = TextDecoration.Underline,
@@ -547,8 +566,6 @@ private fun editorMatchAt(
                         fontWeight = if (einkMode) FontWeight.SemiBold else null
                     )
                 )
-            }
-            e++
         }
     }
     // `code`
@@ -581,7 +598,8 @@ private fun editorMatchAt(
                     markerStyle = markerStyle,
                     contentStyle = SpanStyle(
                         fontStyle = FontStyle.Italic,
-                        textDecoration = if (einkMode) TextDecoration.Underline else null,
+                        fontSynthesis = FontSynthesis.All,
+                        textGeometricTransform = TextGeometricTransform(skewX = -0.25f),
                         color = if (einkMode) Color.Black else accentColor,
                         background = if (einkMode) Color.Transparent else Color.Transparent
                     )
@@ -782,7 +800,23 @@ private fun matchAt(line: String, i: Int, accent: Color, highlightBg: Color, ein
         var e = i + 2
         while (e + 1 < len) {
             if (line[e] == '*' && line[e + 1] == '*' && (e + 2 >= len || line[e + 2] != '*'))
-                return InlineMatch(i, i + 2, e, e + 2, SpanStyle(fontWeight = FontWeight.Bold, color = accent))
+                return InlineMatch(
+                    i,
+                    i + 2,
+                    e,
+                    e + 2,
+                    SpanStyle(
+                        fontWeight = if (einkMode) FontWeight.Black else FontWeight.Bold,
+                        fontSynthesis = FontSynthesis.All,
+                        textGeometricTransform = TextGeometricTransform(scaleX = if (einkMode) 1.12f else 1.06f),
+                        shadow = Shadow(
+                            color = accent,
+                            offset = Offset(if (einkMode) 0.7f else 0.45f, 0f),
+                            blurRadius = 0f
+                        ),
+                        color = accent
+                    )
+                )
             e++
         }
     }
@@ -806,10 +840,11 @@ private fun matchAt(line: String, i: Int, accent: Color, highlightBg: Color, ein
                     e,
                     e + 2,
                     SpanStyle(
-                        fontWeight = if (einkMode) FontWeight.SemiBold else null,
-                        background = if (einkMode) Color.Transparent else highlightBg
-                    ),
-                    addEmphasisDots = einkMode
+                        color = if (einkMode) Color.White else Color.Unspecified,
+                        fontWeight = if (einkMode) FontWeight.Bold else null,
+                        fontSynthesis = FontSynthesis.All,
+                        background = if (einkMode) Color.Black else highlightBg
+                    )
                 )
             e++
         }
@@ -839,11 +874,31 @@ private fun matchAt(line: String, i: Int, accent: Color, highlightBg: Color, ein
         var e = i + 1
         while (e < len) {
             if (line[e] == '*' && (e + 1 >= len || line[e + 1] != '*') && line[e - 1] != '*')
-                return InlineMatch(i, i + 1, e, e + 1, SpanStyle(fontStyle = FontStyle.Italic, color = accent))
+                return InlineMatch(
+                    i,
+                    i + 1,
+                    e,
+                    e + 1,
+                    SpanStyle(
+                        fontStyle = FontStyle.Italic,
+                        fontSynthesis = FontSynthesis.All,
+                        textGeometricTransform = TextGeometricTransform(skewX = -0.25f),
+                        color = accent
+                    )
+                )
             e++
         }
     }
     return null
+}
+
+private fun underlineOpenEnd(line: String, start: Int): Int? {
+    if (start + 2 >= line.length || line[start] != '<' || line[start + 1].lowercaseChar() != 'u') {
+        return null
+    }
+    var pos = start + 2
+    while (pos < line.length && line[pos].isWhitespace()) pos++
+    return if (pos < line.length && line[pos] == '>') pos + 1 else null
 }
 
 private fun AnnotatedString.Builder.appendInlineHighlighted(

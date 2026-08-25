@@ -56,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -111,7 +112,10 @@ fun EditorScreen(
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
 
-    var textState by remember { mutableStateOf(TextFieldValue("")) }
+    var textState by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(""))
+    }
+    var hasLoadedEntry by rememberSaveable(editFilename) { mutableStateOf(false) }
     var showDiscardDialog by remember { mutableStateOf(false) }
     var showShortcutHelp by remember { mutableStateOf(false) }
     var showFindReplace by remember { mutableStateOf(false) }
@@ -147,10 +151,6 @@ fun EditorScreen(
     }
     val fontSize = editorFontSize.toIntOrNull()?.sp ?: 16.sp
 
-    // Detect if current entry is Markdown format
-    val fileFormat by prefs.fileFormat.collectAsStateWithLifecycle(initialValue = "txt")
-    val isMarkdown = editFilename?.endsWith(".md") == true || (editFilename == null && fileFormat == "md")
-
     // Markdown syntax highlight colors (must be read in composable context)
     val mdTextColor = MaterialTheme.colorScheme.onBackground
     val mdMutedColor = MaterialTheme.colorScheme.outline
@@ -158,22 +158,19 @@ fun EditorScreen(
     val mdAccentColor = MaterialTheme.colorScheme.tertiary
     val mdHighlightBg = if (einkMode) Color(0xFFE8E8E8) else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
 
-    val mdHighlightTransform = remember(isMarkdown, mdTextColor, mdMutedColor, mdPrimaryColor, mdAccentColor, mdHighlightBg, einkMode, fontSize) {
-        if (isMarkdown) {
-            VisualTransformation { annotatedString ->
-                renderMarkdownForEditor(
-                    text = annotatedString.text,
-                    textColor = mdTextColor,
-                    mutedColor = mdMutedColor,
-                    primaryColor = mdPrimaryColor,
-                    accentColor = mdAccentColor,
-                    highlightBg = mdHighlightBg,
-                    einkMode = einkMode,
-                    baseFontSize = fontSize
-                )
-            }
-        } else {
-            VisualTransformation.None
+    val mdHighlightTransform = remember(editorFont, mdTextColor, mdMutedColor, mdPrimaryColor, mdAccentColor, mdHighlightBg, einkMode, fontSize) {
+        VisualTransformation { annotatedString ->
+            renderMarkdownForEditor(
+                text = annotatedString.text,
+                textColor = mdTextColor,
+                mutedColor = mdMutedColor,
+                primaryColor = mdPrimaryColor,
+                accentColor = mdAccentColor,
+                highlightBg = mdHighlightBg,
+                einkMode = einkMode,
+                baseFontSize = fontSize,
+                customFontBoldBoost = editorFont != "default"
+            )
         }
     }
     LaunchedEffect(useFullscreen) {
@@ -206,12 +203,13 @@ fun EditorScreen(
 
     // Load existing entry for editing
     LaunchedEffect(editFilename) {
-        if (editFilename != null) {
+        if (editFilename != null && !hasLoadedEntry) {
             val body = viewModel.loadEntryForEdit(editFilename)
             if (body != null) {
                 textState = TextFieldValue(body)
                 selAnchor = null
             }
+            hasLoadedEntry = true
         }
     }
 
