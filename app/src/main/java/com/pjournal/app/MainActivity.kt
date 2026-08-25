@@ -1,5 +1,6 @@
 package com.pjournal.app
 
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -7,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -34,7 +36,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             val darkTheme by prefs.darkTheme.collectAsState(initial = false)
             val einkMode by prefs.einkMode.collectAsState(initial = false)
+            val forceLandscape by prefs.forceLandscape.collectAsState(initial = false)
             val scope = rememberCoroutineScope()
+
+            LaunchedEffect(forceLandscape) {
+                requestedOrientation = if (forceLandscape) {
+                    ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                } else {
+                    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                }
+            }
 
             PJournalTheme(
                 darkTheme = darkTheme,

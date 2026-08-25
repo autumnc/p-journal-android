@@ -34,9 +34,12 @@ class PreferencesManager(private val context: Context) {
         private val KEY_FOCUS_MODE = booleanPreferencesKey("focus_mode")
         private val KEY_DARK_THEME = booleanPreferencesKey("dark_theme")
         private val KEY_EINK_MODE = booleanPreferencesKey("eink_mode")
+        private val KEY_FORCE_LANDSCAPE = booleanPreferencesKey("force_landscape")
         private val KEY_ENCRYPTION_ENABLED = booleanPreferencesKey("encryption_enabled")
         private val KEY_ENCRYPTION_PASSWORD = stringPreferencesKey("encryption_password")
         private val KEY_EDITOR_FONT = stringPreferencesKey("editor_font")
+        private val KEY_EDITOR_BOLD_FONT = stringPreferencesKey("editor_bold_font")
+        private val KEY_EDITOR_ITALIC_FONT = stringPreferencesKey("editor_italic_font")
         private val KEY_EDITOR_FONT_SIZE = stringPreferencesKey("editor_font_size")
         private val KEY_MARKDOWN_ENABLED = booleanPreferencesKey("markdown_enabled")
         private val KEY_FILE_FORMAT = stringPreferencesKey("file_format")
@@ -59,9 +62,12 @@ class PreferencesManager(private val context: Context) {
         json.put("focus_mode", prefs[KEY_FOCUS_MODE] ?: false)
         json.put("dark_theme", prefs[KEY_DARK_THEME] ?: false)
         json.put("eink_mode", prefs[KEY_EINK_MODE] ?: false)
+        json.put("force_landscape", prefs[KEY_FORCE_LANDSCAPE] ?: false)
         json.put("encryption_enabled", prefs[KEY_ENCRYPTION_ENABLED] ?: false)
         json.put("encryption_password", prefs[KEY_ENCRYPTION_PASSWORD] ?: "")
         json.put("editor_font", prefs[KEY_EDITOR_FONT] ?: "default")
+        json.put("editor_bold_font", prefs[KEY_EDITOR_BOLD_FONT] ?: "default")
+        json.put("editor_italic_font", prefs[KEY_EDITOR_ITALIC_FONT] ?: "default")
         json.put("editor_font_size", prefs[KEY_EDITOR_FONT_SIZE] ?: "16")
         json.put("markdown_enabled", prefs[KEY_MARKDOWN_ENABLED] ?: false)
         json.put("file_format", prefs[KEY_FILE_FORMAT] ?: "txt")
@@ -84,9 +90,12 @@ class PreferencesManager(private val context: Context) {
             if (json.has("focus_mode")) prefs[KEY_FOCUS_MODE] = json.getBoolean("focus_mode")
             if (json.has("dark_theme")) prefs[KEY_DARK_THEME] = json.getBoolean("dark_theme")
             if (json.has("eink_mode")) prefs[KEY_EINK_MODE] = json.getBoolean("eink_mode")
+            if (json.has("force_landscape")) prefs[KEY_FORCE_LANDSCAPE] = json.getBoolean("force_landscape")
             if (json.has("encryption_enabled")) prefs[KEY_ENCRYPTION_ENABLED] = json.getBoolean("encryption_enabled")
             if (json.has("encryption_password")) prefs[KEY_ENCRYPTION_PASSWORD] = json.getString("encryption_password")
             if (json.has("editor_font")) prefs[KEY_EDITOR_FONT] = json.getString("editor_font")
+            if (json.has("editor_bold_font")) prefs[KEY_EDITOR_BOLD_FONT] = json.getString("editor_bold_font")
+            if (json.has("editor_italic_font")) prefs[KEY_EDITOR_ITALIC_FONT] = json.getString("editor_italic_font")
             if (json.has("editor_font_size")) prefs[KEY_EDITOR_FONT_SIZE] = json.getString("editor_font_size")
             if (json.has("markdown_enabled")) prefs[KEY_MARKDOWN_ENABLED] = json.getBoolean("markdown_enabled")
             if (json.has("file_format")) prefs[KEY_FILE_FORMAT] = json.getString("file_format")
@@ -110,6 +119,10 @@ class PreferencesManager(private val context: Context) {
         prefs[KEY_EINK_MODE] ?: false
     }
 
+    val forceLandscape: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_FORCE_LANDSCAPE] ?: false
+    }
+
     val encryptionEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[KEY_ENCRYPTION_ENABLED] ?: false
     }
@@ -120,6 +133,14 @@ class PreferencesManager(private val context: Context) {
 
     val editorFont: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[KEY_EDITOR_FONT] ?: "default"
+    }
+
+    val editorBoldFont: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_EDITOR_BOLD_FONT] ?: "default"
+    }
+
+    val editorItalicFont: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_EDITOR_ITALIC_FONT] ?: "default"
     }
 
     val editorFontSize: Flow<String> = context.dataStore.data.map { prefs ->
@@ -151,6 +172,13 @@ class PreferencesManager(private val context: Context) {
     suspend fun setEinkMode(enabled: Boolean) {
         context.dataStore.edit {
             it[KEY_EINK_MODE] = enabled
+            it[KEY_CONFIG_VERSION] = (it[KEY_CONFIG_VERSION] ?: 0L) + 1
+        }
+    }
+
+    suspend fun setForceLandscape(enabled: Boolean) {
+        context.dataStore.edit {
+            it[KEY_FORCE_LANDSCAPE] = enabled
             it[KEY_CONFIG_VERSION] = (it[KEY_CONFIG_VERSION] ?: 0L) + 1
         }
     }
@@ -226,6 +254,8 @@ class PreferencesManager(private val context: Context) {
                 "webdav_sync_state" -> prefs[KEY_WEBDAV_SYNC_STATE] = value
                 "encryption_password" -> prefs[KEY_ENCRYPTION_PASSWORD] = value
                 "editor_font" -> prefs[KEY_EDITOR_FONT] = value
+                "editor_bold_font" -> prefs[KEY_EDITOR_BOLD_FONT] = value
+                "editor_italic_font" -> prefs[KEY_EDITOR_ITALIC_FONT] = value
                 "editor_font_size" -> prefs[KEY_EDITOR_FONT_SIZE] = value
                 "file_format" -> prefs[KEY_FILE_FORMAT] = value
             }
@@ -251,6 +281,8 @@ class PreferencesManager(private val context: Context) {
                 "recent_status" -> prefs[KEY_RECENT_STATUS] ?: ""
                 "encryption_password" -> prefs[KEY_ENCRYPTION_PASSWORD] ?: ""
                 "editor_font" -> prefs[KEY_EDITOR_FONT] ?: "default"
+                "editor_bold_font" -> prefs[KEY_EDITOR_BOLD_FONT] ?: "default"
+                "editor_italic_font" -> prefs[KEY_EDITOR_ITALIC_FONT] ?: "default"
                 "editor_font_size" -> prefs[KEY_EDITOR_FONT_SIZE] ?: "16"
                 "file_format" -> prefs[KEY_FILE_FORMAT] ?: "txt"
                 else -> ""
@@ -263,6 +295,7 @@ class PreferencesManager(private val context: Context) {
             "focus_mode" -> focusMode
             "dark_theme" -> darkTheme
             "eink_mode" -> einkMode
+            "force_landscape" -> forceLandscape
             "encryption_enabled" -> encryptionEnabled
             "markdown_enabled" -> markdownEnabled
             else -> throw IllegalArgumentException("Unknown boolean key: $key")
@@ -274,6 +307,7 @@ class PreferencesManager(private val context: Context) {
             "focus_mode" -> setFocusMode(value)
             "dark_theme" -> setDarkTheme(value)
             "eink_mode" -> setEinkMode(value)
+            "force_landscape" -> setForceLandscape(value)
             "encryption_enabled" -> setEncryptionEnabled(value)
             "markdown_enabled" -> setMarkdownEnabled(value)
         }

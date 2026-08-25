@@ -28,9 +28,12 @@ data class SettingsState(
     val recentStatus: String = "",
     val focusMode: Boolean = false,
     val einkMode: Boolean = false,
+    val forceLandscape: Boolean = false,
     val encryptionEnabled: Boolean = false,
     val encryptionPassword: String = "",
     val editorFont: String = "default",
+    val editorBoldFont: String = "default",
+    val editorItalicFont: String = "default",
     val editorFontSize: String = "16",
     val fileFormat: String = "txt",
     val importedFonts: List<ImportedFont> = emptyList(),
@@ -60,9 +63,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 recentStatus = prefs.getStringFlow("recent_status").first(),
                 focusMode = prefs.focusMode.first(),
                 einkMode = prefs.einkMode.first(),
+                forceLandscape = prefs.forceLandscape.first(),
                 encryptionEnabled = prefs.encryptionEnabled.first(),
                 encryptionPassword = prefs.encryptionPassword.first(),
                 editorFont = prefs.editorFont.first(),
+                editorBoldFont = prefs.editorBoldFont.first(),
+                editorItalicFont = prefs.editorItalicFont.first(),
                 editorFontSize = prefs.editorFontSize.first(),
                 fileFormat = prefs.fileFormat.first(),
                 importedFonts = fontManager.importedFonts.value
@@ -101,6 +107,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setEinkMode(enabled: Boolean) {
         viewModelScope.launch {
             prefs.setEinkMode(enabled)
+            refreshState()
+        }
+    }
+
+    fun setForceLandscape(enabled: Boolean) {
+        viewModelScope.launch {
+            prefs.setForceLandscape(enabled)
             refreshState()
         }
     }
@@ -161,6 +174,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 prefs.setString("editor_font", "default")
                 _state.update { it.copy(editorFont = "default") }
             }
+            if (_state.value.editorBoldFont == fontId) {
+                prefs.setString("editor_bold_font", "default")
+                _state.update { it.copy(editorBoldFont = "default") }
+            }
+            if (_state.value.editorItalicFont == fontId) {
+                prefs.setString("editor_italic_font", "default")
+                _state.update { it.copy(editorItalicFont = "default") }
+            }
         }
     }
 
@@ -181,9 +202,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             recentStatus = prefs.getStringFlow("recent_status").first(),
             focusMode = prefs.focusMode.first(),
             einkMode = prefs.einkMode.first(),
+            forceLandscape = prefs.forceLandscape.first(),
             encryptionEnabled = prefs.encryptionEnabled.first(),
             encryptionPassword = prefs.encryptionPassword.first(),
             editorFont = prefs.editorFont.first(),
+            editorBoldFont = prefs.editorBoldFont.first(),
+            editorItalicFont = prefs.editorItalicFont.first(),
             editorFontSize = prefs.editorFontSize.first(),
             fileFormat = prefs.fileFormat.first(),
             importedFonts = fontManager.importedFonts.value

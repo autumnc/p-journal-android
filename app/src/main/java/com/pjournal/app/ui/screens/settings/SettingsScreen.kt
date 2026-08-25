@@ -26,8 +26,10 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.StayCurrentLandscape
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -264,6 +266,11 @@ fun SettingsScreen(
                 onToggle = { viewModel.setEinkMode(it) }
             )
             Spacer(modifier = Modifier.height(8.dp))
+            ForceLandscapeCard(
+                enabled = state.forceLandscape,
+                onToggle = { viewModel.setForceLandscape(it) }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             FileFormatCard(
                 format = state.fileFormat,
                 onToggle = { viewModel.setFileFormat(it) }
@@ -281,10 +288,28 @@ fun SettingsScreen(
             SectionHeader("编辑器样式")
             Spacer(modifier = Modifier.height(8.dp))
             FontSelector(
-                label = "字体",
+                label = "常规字体",
                 current = state.editorFont,
                 importedFonts = state.importedFonts,
                 onSelect = { viewModel.saveString("editor_font", it) },
+                onImport = { fontPickerLauncher.launch(arrayOf("*/*")) },
+                onDelete = { font -> showFontDeleteDialog = font }
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            FontSelector(
+                label = "粗体字体",
+                current = state.editorBoldFont,
+                importedFonts = state.importedFonts,
+                onSelect = { viewModel.saveString("editor_bold_font", it) },
+                onImport = { fontPickerLauncher.launch(arrayOf("*/*")) },
+                onDelete = { font -> showFontDeleteDialog = font }
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            FontSelector(
+                label = "斜体字体",
+                current = state.editorItalicFont,
+                importedFonts = state.importedFonts,
+                onSelect = { viewModel.saveString("editor_italic_font", it) },
                 onImport = { fontPickerLauncher.launch(arrayOf("*/*")) },
                 onDelete = { font -> showFontDeleteDialog = font }
             )
@@ -504,6 +529,45 @@ private fun EinkModeCard(
             )
             Text(
                 text = if (enabled) "黑白高对比度，适合电子墨水屏" else "正常色彩显示",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+        Switch(
+            checked = enabled,
+            onCheckedChange = onToggle
+        )
+    }
+}
+
+@Composable
+private fun ForceLandscapeCard(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Outlined.StayCurrentLandscape,
+            contentDescription = null,
+            tint = if (enabled)
+                MaterialTheme.colorScheme.primary
+            else
+                MaterialTheme.colorScheme.outline
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "强制横屏",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = if (enabled) "打开应用后保持横屏显示" else "跟随系统方向显示",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline
             )
@@ -786,22 +850,39 @@ private fun FontSelector(
         if (importedFonts.isNotEmpty()) {
             Spacer(modifier = Modifier.height(4.dp))
             importedFonts.forEach { font ->
-                TextButton(
-                    onClick = { onSelect(font.id) },
-                    modifier = Modifier.combinedClickable(
-                        onClick = { onSelect(font.id) },
-                        onLongClick = { onDelete(font) }
-                    )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = font.name,
-                        color = if (current == font.id)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.outline,
-                        fontWeight = if (current == font.id)
-                            FontWeight.Bold else FontWeight.Normal
-                    )
+                    TextButton(
+                        onClick = { onSelect(font.id) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .combinedClickable(
+                                onClick = { onSelect(font.id) },
+                                onLongClick = { onDelete(font) }
+                            )
+                    ) {
+                        Text(
+                            text = font.name,
+                            color = if (current == font.id)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.outline,
+                            fontWeight = if (current == font.id)
+                                FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    IconButton(onClick = { onDelete(font) }) {
+                        Icon(
+                            Icons.Outlined.Delete,
+                            contentDescription = "删除字体",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         }

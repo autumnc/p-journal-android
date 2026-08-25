@@ -86,9 +86,19 @@ fun ViewerScreen(
     val fontManager = remember { FontManager.getInstance(PJournalApp.instance) }
     val importedFonts by fontManager.importedFonts.collectAsStateWithLifecycle(emptyList())
     val editorFont by prefs.editorFont.collectAsStateWithLifecycle(initialValue = "default")
+    val editorBoldFont by prefs.editorBoldFont.collectAsStateWithLifecycle(initialValue = "default")
+    val editorItalicFont by prefs.editorItalicFont.collectAsStateWithLifecycle(initialValue = "default")
     val fontFamily = remember(editorFont, importedFonts) {
         if (editorFont == "default") FontFamily.Default
         else fontManager.getFontFamily(editorFont) ?: FontFamily.Default
+    }
+    val boldFontFamily = remember(editorBoldFont, importedFonts) {
+        if (editorBoldFont == "default") null
+        else fontManager.getFontFamily(editorBoldFont)
+    }
+    val italicFontFamily = remember(editorItalicFont, importedFonts) {
+        if (editorItalicFont == "default") null
+        else fontManager.getFontFamily(editorItalicFont)
     }
 
     LaunchedEffect(filename) {
@@ -254,7 +264,9 @@ fun ViewerScreen(
                     accentYellow = MaterialTheme.colorScheme.tertiary,
                     highlightBg = if (einkMode) Color(0xFFE8E8E8) else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                     einkMode = einkMode,
-                    baseFontSize = MaterialTheme.typography.bodyLarge.fontSize
+                    baseFontSize = MaterialTheme.typography.bodyLarge.fontSize,
+                    boldFontFamily = boldFontFamily,
+                    italicFontFamily = italicFontFamily
                 )
                 Text(
                     text = markdownAnnotated,

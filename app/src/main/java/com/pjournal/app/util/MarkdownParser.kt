@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.font.FontWeight
@@ -125,7 +126,9 @@ fun renderMarkdownForEditor(
     highlightBg: Color = Color.Transparent,
     einkMode: Boolean = false,
     baseFontSize: androidx.compose.ui.unit.TextUnit = 16.sp,
-    customFontBoldBoost: Boolean = false
+    customFontBoldBoost: Boolean = false,
+    boldFontFamily: FontFamily? = null,
+    italicFontFamily: FontFamily? = null
 ): TransformedText {
     val sourceToTransformed = IntArray(text.length + 1)
     val transformedToSource = mutableListOf<Int>()
@@ -190,7 +193,7 @@ fun renderMarkdownForEditor(
             val prefixStart = lineStart + leadingWs
             val contentStart = prefixStart + prefixLen
             val lineEnd = lineStart + line.length
-            val blockStyle = editorRenderedBlockStyle(role, textColor, mutedColor, primaryColor, highlightBg, einkMode, baseFontSize)
+            val blockStyle = editorRenderedBlockStyle(role, textColor, mutedColor, primaryColor, highlightBg, einkMode, baseFontSize, boldFontFamily, italicFontFamily)
 
             if (prefixLen > 0) {
                 hideSourceRange(prefixStart, contentStart, sourceToTransformed, length)
@@ -225,6 +228,8 @@ fun renderMarkdownForEditor(
                     highlightBg = highlightBg,
                     einkMode = einkMode,
                     customFontBoldBoost = customFontBoldBoost,
+                    boldFontFamily = boldFontFamily,
+                    italicFontFamily = italicFontFamily,
                     sourceToTransformed = sourceToTransformed,
                     transformedToSource = transformedToSource
                 )
@@ -239,6 +244,8 @@ fun renderMarkdownForEditor(
                     highlightBg = highlightBg,
                     einkMode = einkMode,
                     customFontBoldBoost = customFontBoldBoost,
+                    boldFontFamily = boldFontFamily,
+                    italicFontFamily = italicFontFamily,
                     sourceToTransformed = sourceToTransformed,
                     transformedToSource = transformedToSource
                 )
@@ -337,17 +344,21 @@ private fun editorRenderedBlockStyle(
     primaryColor: Color,
     highlightBg: Color,
     einkMode: Boolean,
-    baseFontSize: androidx.compose.ui.unit.TextUnit
+    baseFontSize: androidx.compose.ui.unit.TextUnit,
+    boldFontFamily: FontFamily?,
+    italicFontFamily: FontFamily?
 ): SpanStyle {
     return when (role) {
-        MdRole.Heading1 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 1.5f, color = primaryColor)
-        MdRole.Heading2 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 1.3f, color = primaryColor)
-        MdRole.Heading3 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 1.15f, color = primaryColor)
-        MdRole.Heading4 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 1.05f, color = textColor)
-        MdRole.Heading5 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize, color = textColor)
-        MdRole.Heading6 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 0.9f, color = mutedColor)
+        MdRole.Heading1 -> boldStyle(primaryColor, boldFontFamily, baseFontSize * 1.5f)
+        MdRole.Heading2 -> boldStyle(primaryColor, boldFontFamily, baseFontSize * 1.3f)
+        MdRole.Heading3 -> boldStyle(primaryColor, boldFontFamily, baseFontSize * 1.15f)
+        MdRole.Heading4 -> boldStyle(textColor, boldFontFamily, baseFontSize * 1.05f)
+        MdRole.Heading5 -> boldStyle(textColor, boldFontFamily, baseFontSize)
+        MdRole.Heading6 -> boldStyle(mutedColor, boldFontFamily, baseFontSize * 0.9f)
         MdRole.Blockquote -> SpanStyle(
-            fontStyle = FontStyle.Italic,
+            fontFamily = italicFontFamily,
+            fontStyle = if (italicFontFamily == null) FontStyle.Italic else null,
+            fontSynthesis = if (italicFontFamily == null) FontSynthesis.All else FontSynthesis.None,
             color = if (einkMode) Color.Black else mutedColor,
             background = if (einkMode) highlightBg else Color.Transparent
         )
@@ -365,6 +376,8 @@ private fun AnnotatedString.Builder.appendEditorRenderedInline(
     highlightBg: Color,
     einkMode: Boolean,
     customFontBoldBoost: Boolean,
+    boldFontFamily: FontFamily?,
+    italicFontFamily: FontFamily?,
     sourceToTransformed: IntArray,
     transformedToSource: MutableList<Int>
 ) {
@@ -373,7 +386,7 @@ private fun AnnotatedString.Builder.appendEditorRenderedInline(
     val line = source.substring(start, end)
     var pos = 0
     while (pos < line.length) {
-        val match = editorMatchAt(line, pos, markerColor, accentColor, highlightBg, einkMode, customFontBoldBoost)
+        val match = editorMatchAt(line, pos, markerColor, accentColor, highlightBg, einkMode, customFontBoldBoost, boldFontFamily, italicFontFamily)
         if (match == null) {
             appendMappedRange(source, start + pos, start + pos + 1, baseStyle, sourceToTransformed, transformedToSource)
             pos++
@@ -451,7 +464,9 @@ private fun editorMatchAt(
     accentColor: Color,
     highlightBg: Color,
     einkMode: Boolean,
-    customFontBoldBoost: Boolean = false
+    customFontBoldBoost: Boolean = false,
+    boldFontFamily: FontFamily? = null,
+    italicFontFamily: FontFamily? = null
 ): EditorInlineMatch? {
     val len = line.length
     val markerStyle = SpanStyle(
@@ -476,32 +491,40 @@ private fun editorMatchAt(
                     endMarkerStart = e, endMarkerEnd = e + 2,
                     end = e + 2,
                     markerStyle = markerStyle,
-                    contentStyle = SpanStyle(
-                        fontWeight = if (einkMode) FontWeight.Black else FontWeight.Bold,
-                        fontSynthesis = FontSynthesis.All,
-                        textGeometricTransform = TextGeometricTransform(
-                            scaleX = when {
-                                customFontBoldBoost && einkMode -> 1.2f
-                                customFontBoldBoost -> 1.14f
-                                einkMode -> 1.12f
-                                else -> 1.06f
-                            }
-                        ),
-                        shadow = Shadow(
-                            color = if (einkMode) Color.Black else accentColor,
-                            offset = Offset(
-                                when {
-                                    customFontBoldBoost && einkMode -> 1.05f
-                                    customFontBoldBoost -> 0.8f
-                                    einkMode -> 0.7f
-                                    else -> 0.45f
-                                },
-                                0f
+                    contentStyle = if (boldFontFamily != null) {
+                        SpanStyle(
+                            fontFamily = boldFontFamily,
+                            fontSynthesis = FontSynthesis.None,
+                            color = if (einkMode) Color.Black else accentColor
+                        )
+                    } else {
+                        SpanStyle(
+                            fontWeight = if (einkMode) FontWeight.Black else FontWeight.Bold,
+                            fontSynthesis = FontSynthesis.All,
+                            textGeometricTransform = TextGeometricTransform(
+                                scaleX = when {
+                                    customFontBoldBoost && einkMode -> 1.2f
+                                    customFontBoldBoost -> 1.14f
+                                    einkMode -> 1.12f
+                                    else -> 1.06f
+                                }
                             ),
-                            blurRadius = 0f
-                        ),
-                        color = if (einkMode) Color.Black else accentColor
-                    )
+                            shadow = Shadow(
+                                color = if (einkMode) Color.Black else accentColor,
+                                offset = Offset(
+                                    when {
+                                        customFontBoldBoost && einkMode -> 1.05f
+                                        customFontBoldBoost -> 0.8f
+                                        einkMode -> 0.7f
+                                        else -> 0.45f
+                                    },
+                                    0f
+                                ),
+                                blurRadius = 0f
+                            ),
+                            color = if (einkMode) Color.Black else accentColor
+                        )
+                    }
                 )
             }
             e++
@@ -596,13 +619,21 @@ private fun editorMatchAt(
                     endMarkerStart = e, endMarkerEnd = e + 1,
                     end = e + 1,
                     markerStyle = markerStyle,
-                    contentStyle = SpanStyle(
-                        fontStyle = FontStyle.Italic,
-                        fontSynthesis = FontSynthesis.All,
-                        textGeometricTransform = TextGeometricTransform(skewX = -0.25f),
-                        color = if (einkMode) Color.Black else accentColor,
-                        background = if (einkMode) Color.Transparent else Color.Transparent
-                    )
+                    contentStyle = if (italicFontFamily != null) {
+                        SpanStyle(
+                            fontFamily = italicFontFamily,
+                            fontSynthesis = FontSynthesis.None,
+                            color = if (einkMode) Color.Black else accentColor
+                        )
+                    } else {
+                        SpanStyle(
+                            fontStyle = FontStyle.Italic,
+                            fontSynthesis = FontSynthesis.All,
+                            textGeometricTransform = TextGeometricTransform(skewX = -0.25f),
+                            color = if (einkMode) Color.Black else accentColor,
+                            background = if (einkMode) Color.Transparent else Color.Transparent
+                        )
+                    }
                 )
             }
             e++
@@ -656,7 +687,9 @@ fun parseMarkdown(
     accentYellow: Color,
     highlightBg: Color,
     einkMode: Boolean = false,
-    baseFontSize: androidx.compose.ui.unit.TextUnit = 16.sp
+    baseFontSize: androidx.compose.ui.unit.TextUnit = 16.sp,
+    boldFontFamily: FontFamily? = null,
+    italicFontFamily: FontFamily? = null
 ): AnnotatedString {
     return buildAnnotatedString {
         val lines = text.split('\n')
@@ -696,7 +729,7 @@ fun parseMarkdown(
             }
 
             val (role, contentStart) = detectBlockRole(trimmed)
-            val baseStyle = roleBaseStyle(role, textColor, primaryColor, mutedColor, baseFontSize)
+            val baseStyle = roleBaseStyle(role, textColor, primaryColor, mutedColor, baseFontSize, boldFontFamily, italicFontFamily)
 
             if (contentStart > 0) {
                 // Strip block prefix for clean viewer rendering
@@ -705,17 +738,17 @@ fun parseMarkdown(
                     when (role) {
                         MdRole.Blockquote -> {
                             withStyle(SpanStyle(color = mutedColor, fontWeight = FontWeight.Bold)) { append("> ") }
-                            appendInlineHighlighted(rest, baseStyle, mutedColor, accentYellow, highlightBg, einkMode)
+                            appendInlineHighlighted(rest, baseStyle, mutedColor, accentYellow, highlightBg, einkMode, boldFontFamily, italicFontFamily)
                         }
                         MdRole.ListItem -> {
                             withStyle(SpanStyle(color = textColor, fontWeight = FontWeight.Bold)) { append("- ") }
-                            appendInlineHighlighted(rest, baseStyle, mutedColor, accentYellow, highlightBg, einkMode)
+                            appendInlineHighlighted(rest, baseStyle, mutedColor, accentYellow, highlightBg, einkMode, boldFontFamily, italicFontFamily)
                         }
-                        else -> appendInlineHighlighted(rest, baseStyle, mutedColor, accentYellow, highlightBg, einkMode)
+                        else -> appendInlineHighlighted(rest, baseStyle, mutedColor, accentYellow, highlightBg, einkMode, boldFontFamily, italicFontFamily)
                     }
                 }
             } else {
-                appendInlineHighlighted(line, baseStyle, mutedColor, accentYellow, highlightBg, einkMode)
+                appendInlineHighlighted(line, baseStyle, mutedColor, accentYellow, highlightBg, einkMode, boldFontFamily, italicFontFamily)
             }
         }
     }
@@ -745,19 +778,40 @@ private fun roleBaseStyle(
     textColor: Color,
     primaryColor: Color,
     mutedColor: Color,
-    baseFontSize: androidx.compose.ui.unit.TextUnit
+    baseFontSize: androidx.compose.ui.unit.TextUnit,
+    boldFontFamily: FontFamily?,
+    italicFontFamily: FontFamily?
 ): SpanStyle {
     return when (role) {
-        MdRole.Heading1 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 1.5f, color = primaryColor)
-        MdRole.Heading2 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 1.3f, color = primaryColor)
-        MdRole.Heading3 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 1.15f, color = primaryColor)
-        MdRole.Heading4 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 1.05f, color = textColor)
-        MdRole.Heading5 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize, color = textColor)
-        MdRole.Heading6 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 0.9f, color = mutedColor)
-        MdRole.Blockquote -> SpanStyle(fontStyle = FontStyle.Italic, color = mutedColor)
+        MdRole.Heading1 -> boldStyle(primaryColor, boldFontFamily, baseFontSize * 1.5f)
+        MdRole.Heading2 -> boldStyle(primaryColor, boldFontFamily, baseFontSize * 1.3f)
+        MdRole.Heading3 -> boldStyle(primaryColor, boldFontFamily, baseFontSize * 1.15f)
+        MdRole.Heading4 -> boldStyle(textColor, boldFontFamily, baseFontSize * 1.05f)
+        MdRole.Heading5 -> boldStyle(textColor, boldFontFamily, baseFontSize)
+        MdRole.Heading6 -> boldStyle(mutedColor, boldFontFamily, baseFontSize * 0.9f)
+        MdRole.Blockquote -> SpanStyle(
+            fontFamily = italicFontFamily,
+            fontStyle = if (italicFontFamily == null) FontStyle.Italic else null,
+            fontSynthesis = if (italicFontFamily == null) FontSynthesis.All else FontSynthesis.None,
+            color = mutedColor
+        )
         MdRole.ListItem -> SpanStyle(color = textColor)
         else -> SpanStyle(color = textColor)
     }
+}
+
+private fun boldStyle(
+    color: Color,
+    boldFontFamily: FontFamily?,
+    fontSize: androidx.compose.ui.unit.TextUnit
+): SpanStyle {
+    return SpanStyle(
+        fontFamily = boldFontFamily,
+        fontWeight = if (boldFontFamily == null) FontWeight.Bold else null,
+        fontSynthesis = if (boldFontFamily == null) FontSynthesis.All else FontSynthesis.None,
+        fontSize = fontSize,
+        color = color
+    )
 }
 
 // ── Inline formatting (viewer: clean rendering, no markers shown) ──
@@ -771,7 +825,14 @@ private data class InlineMatch(
     val addEmphasisDots: Boolean = false
 )
 
-private fun findInlineMatches(line: String, accent: Color, highlightBg: Color, einkMode: Boolean): List<InlineMatch> {
+private fun findInlineMatches(
+    line: String,
+    accent: Color,
+    highlightBg: Color,
+    einkMode: Boolean,
+    boldFontFamily: FontFamily?,
+    italicFontFamily: FontFamily?
+): List<InlineMatch> {
     val len = line.length
     val result = mutableListOf<InlineMatch>()
     val used = BooleanArray(len)
@@ -779,7 +840,7 @@ private fun findInlineMatches(line: String, accent: Color, highlightBg: Color, e
 
     while (i < len) {
         if (used[i]) { i++; continue }
-        val m = matchAt(line, i, accent, highlightBg, einkMode)
+        val m = matchAt(line, i, accent, highlightBg, einkMode, boldFontFamily, italicFontFamily)
         if (m != null && (m.start until m.end).none { used[it] }) {
             result.add(m)
             for (j in m.start until m.end) used[j] = true
@@ -792,7 +853,15 @@ private fun findInlineMatches(line: String, accent: Color, highlightBg: Color, e
     return result
 }
 
-private fun matchAt(line: String, i: Int, accent: Color, highlightBg: Color, einkMode: Boolean): InlineMatch? {
+private fun matchAt(
+    line: String,
+    i: Int,
+    accent: Color,
+    highlightBg: Color,
+    einkMode: Boolean,
+    boldFontFamily: FontFamily?,
+    italicFontFamily: FontFamily?
+): InlineMatch? {
     val len = line.length
 
     // **bold**
@@ -805,17 +874,25 @@ private fun matchAt(line: String, i: Int, accent: Color, highlightBg: Color, ein
                     i + 2,
                     e,
                     e + 2,
-                    SpanStyle(
-                        fontWeight = if (einkMode) FontWeight.Black else FontWeight.Bold,
-                        fontSynthesis = FontSynthesis.All,
-                        textGeometricTransform = TextGeometricTransform(scaleX = if (einkMode) 1.12f else 1.06f),
-                        shadow = Shadow(
-                            color = accent,
-                            offset = Offset(if (einkMode) 0.7f else 0.45f, 0f),
-                            blurRadius = 0f
-                        ),
-                        color = accent
-                    )
+                    if (boldFontFamily != null) {
+                        SpanStyle(
+                            fontFamily = boldFontFamily,
+                            fontSynthesis = FontSynthesis.None,
+                            color = accent
+                        )
+                    } else {
+                        SpanStyle(
+                            fontWeight = if (einkMode) FontWeight.Black else FontWeight.Bold,
+                            fontSynthesis = FontSynthesis.All,
+                            textGeometricTransform = TextGeometricTransform(scaleX = if (einkMode) 1.12f else 1.06f),
+                            shadow = Shadow(
+                                color = accent,
+                                offset = Offset(if (einkMode) 0.7f else 0.45f, 0f),
+                                blurRadius = 0f
+                            ),
+                            color = accent
+                        )
+                    }
                 )
             e++
         }
@@ -879,12 +956,20 @@ private fun matchAt(line: String, i: Int, accent: Color, highlightBg: Color, ein
                     i + 1,
                     e,
                     e + 1,
-                    SpanStyle(
-                        fontStyle = FontStyle.Italic,
-                        fontSynthesis = FontSynthesis.All,
-                        textGeometricTransform = TextGeometricTransform(skewX = -0.25f),
-                        color = accent
-                    )
+                    if (italicFontFamily != null) {
+                        SpanStyle(
+                            fontFamily = italicFontFamily,
+                            fontSynthesis = FontSynthesis.None,
+                            color = accent
+                        )
+                    } else {
+                        SpanStyle(
+                            fontStyle = FontStyle.Italic,
+                            fontSynthesis = FontSynthesis.All,
+                            textGeometricTransform = TextGeometricTransform(skewX = -0.25f),
+                            color = accent
+                        )
+                    }
                 )
             e++
         }
@@ -907,9 +992,11 @@ private fun AnnotatedString.Builder.appendInlineHighlighted(
     mutedColor: Color,
     accent: Color,
     highlightBg: Color,
-    einkMode: Boolean
+    einkMode: Boolean,
+    boldFontFamily: FontFamily?,
+    italicFontFamily: FontFamily?
 ) {
-    val matches = findInlineMatches(line, accent, highlightBg, einkMode)
+    val matches = findInlineMatches(line, accent, highlightBg, einkMode, boldFontFamily, italicFontFamily)
     if (matches.isEmpty()) {
         withStyle(baseStyle) { append(line) }
         return

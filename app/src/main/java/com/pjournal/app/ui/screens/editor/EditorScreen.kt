@@ -144,10 +144,20 @@ fun EditorScreen(
     val fontManager = remember { FontManager.getInstance(PJournalApp.instance) }
     val importedFonts by fontManager.importedFonts.collectAsStateWithLifecycle(emptyList())
     val editorFont by prefs.editorFont.collectAsStateWithLifecycle(initialValue = "default")
+    val editorBoldFont by prefs.editorBoldFont.collectAsStateWithLifecycle(initialValue = "default")
+    val editorItalicFont by prefs.editorItalicFont.collectAsStateWithLifecycle(initialValue = "default")
     val editorFontSize by prefs.editorFontSize.collectAsStateWithLifecycle(initialValue = "16")
     val fontFamily = remember(editorFont, importedFonts) {
         if (editorFont == "default") FontFamily.Default
         else fontManager.getFontFamily(editorFont) ?: FontFamily.Default
+    }
+    val boldFontFamily = remember(editorBoldFont, importedFonts) {
+        if (editorBoldFont == "default") null
+        else fontManager.getFontFamily(editorBoldFont)
+    }
+    val italicFontFamily = remember(editorItalicFont, importedFonts) {
+        if (editorItalicFont == "default") null
+        else fontManager.getFontFamily(editorItalicFont)
     }
     val fontSize = editorFontSize.toIntOrNull()?.sp ?: 16.sp
 
@@ -158,7 +168,7 @@ fun EditorScreen(
     val mdAccentColor = MaterialTheme.colorScheme.tertiary
     val mdHighlightBg = if (einkMode) Color(0xFFE8E8E8) else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
 
-    val mdHighlightTransform = remember(editorFont, mdTextColor, mdMutedColor, mdPrimaryColor, mdAccentColor, mdHighlightBg, einkMode, fontSize) {
+    val mdHighlightTransform = remember(editorFont, boldFontFamily, italicFontFamily, mdTextColor, mdMutedColor, mdPrimaryColor, mdAccentColor, mdHighlightBg, einkMode, fontSize) {
         VisualTransformation { annotatedString ->
             renderMarkdownForEditor(
                 text = annotatedString.text,
@@ -169,7 +179,9 @@ fun EditorScreen(
                 highlightBg = mdHighlightBg,
                 einkMode = einkMode,
                 baseFontSize = fontSize,
-                customFontBoldBoost = editorFont != "default"
+                customFontBoldBoost = editorFont != "default",
+                boldFontFamily = boldFontFamily,
+                italicFontFamily = italicFontFamily
             )
         }
     }
