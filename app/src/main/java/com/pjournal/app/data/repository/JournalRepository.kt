@@ -50,6 +50,7 @@ class JournalRepository(private val dao: JournalEntryDao) {
             filename = filename,
             content = fullContent,
             createdAt = timestamp,
+            updatedAt = timestamp,
             prompt = prompt,
             wordCount = wordCount,
             dateKey = dateKey,
@@ -87,7 +88,7 @@ class JournalRepository(private val dao: JournalEntryDao) {
         return streak
     }
 
-    suspend fun insertEntry(filename: String, content: String) {
+    suspend fun insertEntry(filename: String, content: String, updatedAt: Long? = null) {
         val lines = content.split('\n')
         var prompt: String? = null
         var createdAt = System.currentTimeMillis()
@@ -114,6 +115,7 @@ class JournalRepository(private val dao: JournalEntryDao) {
             filename = filename,
             content = content,
             createdAt = createdAt,
+            updatedAt = updatedAt ?: createdAt,
             prompt = prompt,
             wordCount = wordCount,
             dateKey = dateKey,
@@ -124,7 +126,8 @@ class JournalRepository(private val dao: JournalEntryDao) {
 
     suspend fun updateEntry(filename: String, text: String, prompt: String? = null, fileFormat: String = "txt"): String {
         val existing = dao.getEntry(filename)
-        val createdAt = existing?.createdAt ?: System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        val createdAt = existing?.createdAt ?: now
 
         // If file format changed, use new extension for the updated filename
         val ext = if (fileFormat == "md") ".md" else ".txt"
@@ -156,6 +159,7 @@ class JournalRepository(private val dao: JournalEntryDao) {
             filename = newFilename,
             content = fullContent,
             createdAt = createdAt,
+            updatedAt = now,
             prompt = prompt,
             wordCount = wordCount,
             dateKey = dateKey,

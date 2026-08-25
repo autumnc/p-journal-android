@@ -16,6 +16,9 @@ data class JournalEntryEntity(
     @ColumnInfo(name = "created_at")
     val createdAt: Long,
 
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long = createdAt,
+
     @ColumnInfo(name = "prompt")
     val prompt: String? = null,
 

@@ -10,11 +10,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pjournal.app.data.PreferencesManager
 import com.pjournal.app.ui.screens.browser.BrowserScreen
 import com.pjournal.app.ui.screens.editor.EditorScreen
 import com.pjournal.app.ui.screens.home.HomeScreen
 import com.pjournal.app.ui.screens.settings.SettingsScreen
+import com.pjournal.app.ui.screens.settings.SettingsViewModelFactory
 import com.pjournal.app.ui.screens.viewer.ViewerScreen
 
 sealed class Screen(val route: String) {
@@ -105,6 +107,7 @@ fun NavGraph(
                 editFilename = filename.ifBlank { null },
                 isPromptMode = mode == "prompt",
                 focusMode = focusMode,
+                einkMode = einkMode,
                 onDone = { navController.popBackStack() },
                 onNavigateBack = { navController.popBackStack() }
             )
@@ -129,12 +132,14 @@ fun NavGraph(
             val filename = backStackEntry.arguments?.getString("filename") ?: ""
             ViewerScreen(
                 filename = filename,
+                einkMode = einkMode,
                 onBack = { navController.popBackStack() }
             )
         }
 
         composable(Screen.Settings.route) {
             SettingsScreen(
+                viewModel = viewModel(factory = SettingsViewModelFactory(context.applicationContext as android.app.Application)),
                 onBack = { navController.popBackStack() }
             )
         }

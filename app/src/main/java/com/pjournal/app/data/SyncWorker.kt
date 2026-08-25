@@ -72,7 +72,7 @@ class SyncWorker(
                     val content = client.download(url, username, password, filename)
                     if (content != null) {
                         try {
-                            repository.insertEntry(filename, content)
+                            repository.insertEntry(filename, content, remoteFile?.lastModified)
                             remoteFile?.lastModified?.let { newState[filename] = it }
                         } catch (_: Exception) {}
                     }
@@ -83,11 +83,11 @@ class SyncWorker(
                 } else {
                     val success = client.upload(url, username, password, filename, localEntry!!.content)
                     if (success) {
-                        newState[filename] = localEntry.createdAt
+                        newState[filename] = localEntry.updatedAt
                     }
                 }
             } else {
-                val localMtime = localEntry!!.createdAt
+                val localMtime = localEntry!!.updatedAt
                 val remoteMtime = remoteFile!!.lastModified
 
                 if (remoteMtime == null) {
@@ -107,7 +107,7 @@ class SyncWorker(
                     val content = client.download(url, username, password, filename)
                     if (content != null) {
                         try {
-                            repository.insertEntry(filename, content)
+                            repository.insertEntry(filename, content, remoteMtime)
                             newState[filename] = remoteMtime
                         } catch (_: Exception) {
                             newState[filename] = prevState[filename] ?: remoteMtime

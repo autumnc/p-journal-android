@@ -63,6 +63,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -79,8 +80,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -88,7 +87,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pjournal.app.data.PreferencesManager
 import com.pjournal.app.data.font.FontManager
 import com.pjournal.app.ui.util.isCtrl
-import com.pjournal.app.util.parseMarkdownHighlight
+import com.pjournal.app.util.renderMarkdownForEditor
 import com.pjournal.app.PJournalApp
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -102,6 +101,7 @@ fun EditorScreen(
     editFilename: String? = null,
     isPromptMode: Boolean = false,
     focusMode: Boolean,
+    einkMode: Boolean = false,
     onDone: () -> Unit,
     onNavigateBack: () -> Unit,
     viewModel: EditorViewModel = viewModel()
@@ -156,19 +156,21 @@ fun EditorScreen(
     val mdMutedColor = MaterialTheme.colorScheme.outline
     val mdPrimaryColor = MaterialTheme.colorScheme.primary
     val mdAccentColor = MaterialTheme.colorScheme.tertiary
+    val mdHighlightBg = if (einkMode) Color(0xFFE8E8E8) else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
 
-    val mdHighlightTransform = remember(isMarkdown, mdTextColor, mdMutedColor, mdPrimaryColor, mdAccentColor, fontSize) {
+    val mdHighlightTransform = remember(isMarkdown, mdTextColor, mdMutedColor, mdPrimaryColor, mdAccentColor, mdHighlightBg, einkMode, fontSize) {
         if (isMarkdown) {
             VisualTransformation { annotatedString ->
-                val highlighted = parseMarkdownHighlight(
+                renderMarkdownForEditor(
                     text = annotatedString.text,
                     textColor = mdTextColor,
                     mutedColor = mdMutedColor,
                     primaryColor = mdPrimaryColor,
                     accentColor = mdAccentColor,
+                    highlightBg = mdHighlightBg,
+                    einkMode = einkMode,
                     baseFontSize = fontSize
                 )
-                TransformedText(highlighted, OffsetMapping.Identity)
             }
         } else {
             VisualTransformation.None
@@ -861,4 +863,3 @@ private fun FindReplaceDialog(
         }
     )
 }
-

@@ -139,7 +139,7 @@ class SyncManager(
                             val content = client.download(url, username, password, filename)
                             if (content != null) {
                                 try {
-                                    repository.insertEntry(filename, content)
+                                    repository.insertEntry(filename, content, remoteFile?.lastModified)
                                     downloadCount++
                                     remoteFile?.lastModified?.let { newState[filename] = it }
                                     syncLogDao.insert(SyncLogEntity(
@@ -189,13 +189,13 @@ class SyncManager(
                             ))
                             if (ok) {
                                 uploadCount++
-                                newState[filename] = localEntry.createdAt
+                                newState[filename] = localEntry.updatedAt
                             } else {
                                 failed++
                             }
                         }
                     } else {
-                        val localMtime = localEntry!!.createdAt
+                        val localMtime = localEntry!!.updatedAt
                         val remoteMtime = remoteFile!!.lastModified
 
                         if (remoteMtime == null) {
@@ -231,7 +231,7 @@ class SyncManager(
                             val content = client.download(url, username, password, filename)
                             if (content != null) {
                                 try {
-                                    repository.insertEntry(filename, content)
+                                    repository.insertEntry(filename, content, remoteMtime)
                                     downloadCount++
                                     newState[filename] = remoteMtime
                                     syncLogDao.insert(SyncLogEntity(

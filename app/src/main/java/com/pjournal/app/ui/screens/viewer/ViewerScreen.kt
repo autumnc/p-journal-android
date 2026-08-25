@@ -42,6 +42,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,6 +63,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ViewerScreen(
     filename: String,
+    einkMode: Boolean = false,
     onBack: () -> Unit
 ) {
     val repository = remember {
@@ -250,7 +252,8 @@ fun ViewerScreen(
                     mutedColor = MaterialTheme.colorScheme.outline,
                     primaryColor = MaterialTheme.colorScheme.primary,
                     accentYellow = MaterialTheme.colorScheme.tertiary,
-                    highlightBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                    highlightBg = if (einkMode) Color(0xFFE8E8E8) else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                    einkMode = einkMode,
                     baseFontSize = MaterialTheme.typography.bodyLarge.fontSize
                 )
                 Text(

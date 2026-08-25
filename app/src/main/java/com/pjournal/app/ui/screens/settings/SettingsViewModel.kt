@@ -3,6 +3,8 @@ package com.pjournal.app.ui.screens.settings
 import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.pjournal.app.data.PreferencesManager
 import com.pjournal.app.data.font.FontManager
@@ -186,5 +188,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             fileFormat = prefs.fileFormat.first(),
             importedFonts = fontManager.importedFonts.value
         )
+    }
+}
+
+class SettingsViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        @Suppress("UNCHECKED_CAST")
+        return SettingsViewModel(application) as T
     }
 }

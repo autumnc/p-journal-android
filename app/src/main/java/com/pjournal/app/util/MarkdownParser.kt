@@ -6,6 +6,8 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
@@ -20,6 +22,8 @@ fun parseMarkdownHighlight(
     mutedColor: Color,
     primaryColor: Color,
     accentColor: Color,
+    highlightBg: Color = Color.Transparent,
+    einkMode: Boolean = false,
     baseFontSize: androidx.compose.ui.unit.TextUnit = 16.sp
 ): AnnotatedString {
     return buildAnnotatedString {
@@ -34,14 +38,22 @@ fun parseMarkdownHighlight(
             // Fenced code block toggle
             if (trimmed.startsWith("```")) {
                 inCodeBlock = !inCodeBlock
-                withStyle(SpanStyle(color = primaryColor, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)) {
+                withStyle(SpanStyle(
+                    color = primaryColor,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    fontWeight = if (einkMode) FontWeight.Bold else null
+                )) {
                     append(line)
                 }
                 continue
             }
 
             if (inCodeBlock) {
-                withStyle(SpanStyle(color = accentColor, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)) {
+                withStyle(SpanStyle(
+                    color = accentColor,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    background = if (einkMode) highlightBg else Color.Transparent
+                )) {
                     append(line)
                 }
                 continue
@@ -58,8 +70,8 @@ fun parseMarkdownHighlight(
                 MdRole.Heading1, MdRole.Heading2, MdRole.Heading3,
                 MdRole.Heading4, MdRole.Heading5, MdRole.Heading6 ->
                     SpanStyle(color = primaryColor, fontWeight = FontWeight.Bold)
-                MdRole.Blockquote -> SpanStyle(color = primaryColor)
-                MdRole.ListItem -> SpanStyle(color = primaryColor)
+                MdRole.Blockquote -> SpanStyle(color = primaryColor, fontWeight = if (einkMode) FontWeight.Bold else null)
+                MdRole.ListItem -> SpanStyle(color = primaryColor, fontWeight = if (einkMode) FontWeight.Bold else null)
                 else -> SpanStyle(color = textColor)
             }
             val headingContentStyle = when (role) {
@@ -69,7 +81,11 @@ fun parseMarkdownHighlight(
                 MdRole.Heading4 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 1.05f, color = textColor)
                 MdRole.Heading5 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize, color = textColor)
                 MdRole.Heading6 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 0.9f, color = mutedColor)
-                MdRole.Blockquote -> SpanStyle(fontStyle = FontStyle.Italic, color = mutedColor)
+                MdRole.Blockquote -> SpanStyle(
+                    fontStyle = FontStyle.Italic,
+                    color = if (einkMode) textColor else mutedColor,
+                    background = if (einkMode) highlightBg else Color.Transparent
+                )
                 else -> SpanStyle(color = textColor)
             }
 
@@ -86,13 +102,303 @@ fun parseMarkdownHighlight(
                 // Rest of the line with heading content style + inline highlights
                 val rest = trimmed.substring(prefixLen)
                 if (rest.isNotEmpty()) {
-                    appendInlineWithMarkers(rest, headingContentStyle, primaryColor, accentColor)
+                    appendInlineWithMarkers(rest, headingContentStyle, primaryColor, accentColor, highlightBg, einkMode)
                 }
             } else {
                 // Normal line: apply inline highlighting keeping markers
-                appendInlineWithMarkers(line, SpanStyle(color = textColor), primaryColor, accentColor)
+                appendInlineWithMarkers(line, SpanStyle(color = textColor), primaryColor, accentColor, highlightBg, einkMode)
             }
         }
+    }
+}
+
+fun renderMarkdownForEditor(
+    text: String,
+    textColor: Color,
+    mutedColor: Color,
+    primaryColor: Color,
+    accentColor: Color,
+    highlightBg: Color = Color.Transparent,
+    einkMode: Boolean = false,
+    baseFontSize: androidx.compose.ui.unit.TextUnit = 16.sp
+): TransformedText {
+    val sourceToTransformed = IntArray(text.length + 1)
+    val transformedToSource = mutableListOf<Int>()
+
+    val rendered = buildAnnotatedString {
+        val lines = text.split('\n')
+        var sourceLineStart = 0
+        var inCodeBlock = false
+
+        for ((lineIdx, line) in lines.withIndex()) {
+            if (lineIdx > 0) {
+                appendMappedText(
+                    value = "\n",
+                    sourceStart = sourceLineStart - 1,
+                    style = SpanStyle(color = textColor),
+                    sourceToTransformed = sourceToTransformed,
+                    transformedToSource = transformedToSource
+                )
+            }
+
+            val trimmed = line.trimStart()
+            val leadingWs = line.length - trimmed.length
+            val lineStart = sourceLineStart
+
+            if (trimmed.startsWith("```")) {
+                inCodeBlock = !inCodeBlock
+                val fenceStart = lineStart + leadingWs
+                hideSourceRange(fenceStart, lineStart + line.length, sourceToTransformed, length)
+                sourceLineStart += line.length + 1
+                continue
+            }
+
+            if (inCodeBlock) {
+                appendMappedRange(
+                    source = text,
+                    start = lineStart,
+                    end = lineStart + line.length,
+                    style = SpanStyle(
+                        color = if (einkMode) textColor else accentColor,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        background = highlightBg
+                    ),
+                    sourceToTransformed = sourceToTransformed,
+                    transformedToSource = transformedToSource
+                )
+                sourceLineStart += line.length + 1
+                continue
+            }
+
+            if (leadingWs > 0) {
+                appendMappedRange(
+                    source = text,
+                    start = lineStart,
+                    end = lineStart + leadingWs,
+                    style = SpanStyle(color = textColor),
+                    sourceToTransformed = sourceToTransformed,
+                    transformedToSource = transformedToSource
+                )
+            }
+
+            val (role, prefixLen) = detectBlockRole(trimmed)
+            val prefixStart = lineStart + leadingWs
+            val contentStart = prefixStart + prefixLen
+            val lineEnd = lineStart + line.length
+            val blockStyle = editorRenderedBlockStyle(role, textColor, mutedColor, primaryColor, highlightBg, einkMode, baseFontSize)
+
+            if (prefixLen > 0) {
+                hideSourceRange(prefixStart, contentStart, sourceToTransformed, length)
+                when (role) {
+                    MdRole.Blockquote -> appendInsertedText(
+                        value = "▌ ",
+                        sourceOffset = prefixStart,
+                        style = SpanStyle(
+                            color = if (einkMode) Color.Black else primaryColor,
+                            fontWeight = FontWeight.Black
+                        ),
+                        transformedToSource = transformedToSource
+                    )
+                    MdRole.ListItem -> appendInsertedText(
+                        value = "• ",
+                        sourceOffset = prefixStart,
+                        style = SpanStyle(
+                            color = if (einkMode) Color.Black else primaryColor,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        transformedToSource = transformedToSource
+                    )
+                    else -> Unit
+                }
+                appendEditorRenderedInline(
+                    source = text,
+                    start = contentStart,
+                    end = lineEnd,
+                    baseStyle = blockStyle,
+                    markerColor = primaryColor,
+                    accentColor = accentColor,
+                    highlightBg = highlightBg,
+                    einkMode = einkMode,
+                    sourceToTransformed = sourceToTransformed,
+                    transformedToSource = transformedToSource
+                )
+            } else {
+                appendEditorRenderedInline(
+                    source = text,
+                    start = lineStart,
+                    end = lineEnd,
+                    baseStyle = blockStyle,
+                    markerColor = primaryColor,
+                    accentColor = accentColor,
+                    highlightBg = highlightBg,
+                    einkMode = einkMode,
+                    sourceToTransformed = sourceToTransformed,
+                    transformedToSource = transformedToSource
+                )
+            }
+
+            sourceLineStart += line.length + 1
+        }
+    }
+
+    sourceToTransformed[text.length] = rendered.length
+    transformedToSource.add(text.length)
+
+    val offsetMapping = object : OffsetMapping {
+        override fun originalToTransformed(offset: Int): Int {
+            return sourceToTransformed[offset.coerceIn(0, sourceToTransformed.lastIndex)]
+                .coerceIn(0, rendered.length)
+        }
+
+        override fun transformedToOriginal(offset: Int): Int {
+            return transformedToSource[offset.coerceIn(0, transformedToSource.lastIndex)]
+                .coerceIn(0, text.length)
+        }
+    }
+
+    return TransformedText(rendered, offsetMapping)
+}
+
+private fun AnnotatedString.Builder.appendMappedText(
+    value: String,
+    sourceStart: Int,
+    style: SpanStyle,
+    sourceToTransformed: IntArray,
+    transformedToSource: MutableList<Int>
+) {
+    withStyle(style) {
+        for (i in value.indices) {
+            val sourceOffset = sourceStart + i
+            if (sourceOffset in sourceToTransformed.indices) {
+                sourceToTransformed[sourceOffset] = length
+            }
+            transformedToSource.add(sourceOffset.coerceAtLeast(0))
+            append(value[i])
+        }
+    }
+}
+
+private fun AnnotatedString.Builder.appendInsertedText(
+    value: String,
+    sourceOffset: Int,
+    style: SpanStyle,
+    transformedToSource: MutableList<Int>
+) {
+    withStyle(style) {
+        for (char in value) {
+            transformedToSource.add(sourceOffset)
+            append(char)
+        }
+    }
+}
+
+private fun AnnotatedString.Builder.appendMappedRange(
+    source: String,
+    start: Int,
+    end: Int,
+    style: SpanStyle,
+    sourceToTransformed: IntArray,
+    transformedToSource: MutableList<Int>
+) {
+    if (start >= end) return
+    withStyle(style) {
+        for (sourceOffset in start until end) {
+            sourceToTransformed[sourceOffset] = length
+            transformedToSource.add(sourceOffset)
+            append(source[sourceOffset])
+        }
+    }
+}
+
+private fun hideSourceRange(
+    start: Int,
+    end: Int,
+    sourceToTransformed: IntArray,
+    transformedOffset: Int
+) {
+    for (sourceOffset in start until end) {
+        if (sourceOffset in sourceToTransformed.indices) {
+            sourceToTransformed[sourceOffset] = transformedOffset
+        }
+    }
+}
+
+private fun editorRenderedBlockStyle(
+    role: MdRole,
+    textColor: Color,
+    mutedColor: Color,
+    primaryColor: Color,
+    highlightBg: Color,
+    einkMode: Boolean,
+    baseFontSize: androidx.compose.ui.unit.TextUnit
+): SpanStyle {
+    return when (role) {
+        MdRole.Heading1 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 1.5f, color = primaryColor)
+        MdRole.Heading2 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 1.3f, color = primaryColor)
+        MdRole.Heading3 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 1.15f, color = primaryColor)
+        MdRole.Heading4 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 1.05f, color = textColor)
+        MdRole.Heading5 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize, color = textColor)
+        MdRole.Heading6 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = baseFontSize * 0.9f, color = mutedColor)
+        MdRole.Blockquote -> SpanStyle(
+            fontStyle = FontStyle.Italic,
+            color = if (einkMode) Color.Black else mutedColor,
+            background = if (einkMode) highlightBg else Color.Transparent
+        )
+        else -> SpanStyle(color = textColor)
+    }
+}
+
+private fun AnnotatedString.Builder.appendEditorRenderedInline(
+    source: String,
+    start: Int,
+    end: Int,
+    baseStyle: SpanStyle,
+    markerColor: Color,
+    accentColor: Color,
+    highlightBg: Color,
+    einkMode: Boolean,
+    sourceToTransformed: IntArray,
+    transformedToSource: MutableList<Int>
+) {
+    if (start >= end) return
+
+    val line = source.substring(start, end)
+    val matches = findEditorInlineMatches(line, markerColor, accentColor, highlightBg, einkMode)
+    if (matches.isEmpty()) {
+        appendMappedRange(source, start, end, baseStyle, sourceToTransformed, transformedToSource)
+        return
+    }
+
+    var pos = 0
+    for (match in matches) {
+        if (pos < match.start) {
+            appendMappedRange(source, start + pos, start + match.start, baseStyle, sourceToTransformed, transformedToSource)
+        }
+        hideSourceRange(
+            start + match.markerStart,
+            start + match.markerEnd,
+            sourceToTransformed,
+            length
+        )
+        appendMappedRange(
+            source,
+            start + match.contentStart,
+            start + match.contentEnd,
+            match.contentStyle,
+            sourceToTransformed,
+            transformedToSource
+        )
+        hideSourceRange(
+            start + match.endMarkerStart,
+            start + match.endMarkerEnd,
+            sourceToTransformed,
+            length
+        )
+        pos = match.end
+    }
+
+    if (pos < line.length) {
+        appendMappedRange(source, start + pos, end, baseStyle, sourceToTransformed, transformedToSource)
     }
 }
 
@@ -109,7 +415,13 @@ private data class EditorInlineMatch(
     val contentStyle: SpanStyle
 )
 
-private fun findEditorInlineMatches(line: String, primaryColor: Color, accentColor: Color): List<EditorInlineMatch> {
+private fun findEditorInlineMatches(
+    line: String,
+    primaryColor: Color,
+    accentColor: Color,
+    highlightBg: Color,
+    einkMode: Boolean
+): List<EditorInlineMatch> {
     val len = line.length
     val result = mutableListOf<EditorInlineMatch>()
     val used = BooleanArray(len)
@@ -117,7 +429,7 @@ private fun findEditorInlineMatches(line: String, primaryColor: Color, accentCol
 
     while (i < len) {
         if (used[i]) { i++; continue }
-        val m = editorMatchAt(line, i, primaryColor, accentColor)
+        val m = editorMatchAt(line, i, primaryColor, accentColor, highlightBg, einkMode)
         if (m != null && (m.start until m.end).none { used[it] }) {
             result.add(m)
             for (j in m.start until m.end) used[j] = true
@@ -130,10 +442,25 @@ private fun findEditorInlineMatches(line: String, primaryColor: Color, accentCol
     return result
 }
 
-private fun editorMatchAt(line: String, i: Int, primaryColor: Color, accentColor: Color): EditorInlineMatch? {
+private fun editorMatchAt(
+    line: String,
+    i: Int,
+    primaryColor: Color,
+    accentColor: Color,
+    highlightBg: Color,
+    einkMode: Boolean
+): EditorInlineMatch? {
     val len = line.length
-    val markerStyle = SpanStyle(color = primaryColor)
-    val monoStyle = SpanStyle(color = accentColor, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+    val markerStyle = SpanStyle(
+        color = primaryColor,
+        fontWeight = if (einkMode) FontWeight.Black else null,
+        background = if (einkMode) highlightBg else Color.Transparent
+    )
+    val monoStyle = SpanStyle(
+        color = accentColor,
+        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+        background = highlightBg
+    )
 
     // **bold**
     if (i + 4 < len && line[i] == '*' && line[i + 1] == '*' && line[i + 2] != '*') {
@@ -146,7 +473,15 @@ private fun editorMatchAt(line: String, i: Int, primaryColor: Color, accentColor
                     endMarkerStart = e, endMarkerEnd = e + 2,
                     end = e + 2,
                     markerStyle = markerStyle,
-                    contentStyle = SpanStyle(fontWeight = FontWeight.Bold, color = accentColor)
+                    contentStyle = if (einkMode) {
+                        SpanStyle(
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            background = Color.Black
+                        )
+                    } else {
+                        SpanStyle(fontWeight = FontWeight.Bold, color = accentColor)
+                    }
                 )
             }
             e++
@@ -163,7 +498,11 @@ private fun editorMatchAt(line: String, i: Int, primaryColor: Color, accentColor
                     endMarkerStart = e, endMarkerEnd = e + 2,
                     end = e + 2,
                     markerStyle = markerStyle,
-                    contentStyle = SpanStyle(textDecoration = TextDecoration.LineThrough, color = accentColor)
+                    contentStyle = SpanStyle(
+                        textDecoration = TextDecoration.LineThrough,
+                        color = if (einkMode) Color.Black else accentColor,
+                        fontWeight = if (einkMode) FontWeight.SemiBold else null
+                    )
                 )
             }
             e++
@@ -180,7 +519,12 @@ private fun editorMatchAt(line: String, i: Int, primaryColor: Color, accentColor
                     endMarkerStart = e, endMarkerEnd = e + 2,
                     end = e + 2,
                     markerStyle = markerStyle,
-                    contentStyle = SpanStyle(color = accentColor)
+                    contentStyle = SpanStyle(
+                        color = if (einkMode) Color.Black else accentColor,
+                        fontWeight = if (einkMode) FontWeight.Black else FontWeight.SemiBold,
+                        textDecoration = if (einkMode) TextDecoration.Underline else null,
+                        background = if (einkMode) highlightBg else highlightBg
+                    )
                 )
             }
             e++
@@ -197,7 +541,11 @@ private fun editorMatchAt(line: String, i: Int, primaryColor: Color, accentColor
                     endMarkerStart = e, endMarkerEnd = e + 4,
                     end = e + 4,
                     markerStyle = markerStyle,
-                    contentStyle = SpanStyle(textDecoration = TextDecoration.Underline, color = accentColor)
+                    contentStyle = SpanStyle(
+                        textDecoration = TextDecoration.Underline,
+                        color = if (einkMode) Color.Black else accentColor,
+                        fontWeight = if (einkMode) FontWeight.SemiBold else null
+                    )
                 )
             }
             e++
@@ -231,7 +579,12 @@ private fun editorMatchAt(line: String, i: Int, primaryColor: Color, accentColor
                     endMarkerStart = e, endMarkerEnd = e + 1,
                     end = e + 1,
                     markerStyle = markerStyle,
-                    contentStyle = SpanStyle(fontStyle = FontStyle.Italic, color = accentColor)
+                    contentStyle = SpanStyle(
+                        fontStyle = FontStyle.Italic,
+                        textDecoration = if (einkMode) TextDecoration.Underline else null,
+                        color = if (einkMode) Color.Black else accentColor,
+                        background = if (einkMode) Color.Transparent else Color.Transparent
+                    )
                 )
             }
             e++
@@ -244,9 +597,11 @@ private fun AnnotatedString.Builder.appendInlineWithMarkers(
     line: String,
     baseStyle: SpanStyle,
     primaryColor: Color,
-    accentColor: Color
+    accentColor: Color,
+    highlightBg: Color,
+    einkMode: Boolean
 ) {
-    val matches = findEditorInlineMatches(line, primaryColor, accentColor)
+    val matches = findEditorInlineMatches(line, primaryColor, accentColor, highlightBg, einkMode)
     if (matches.isEmpty()) {
         withStyle(baseStyle) { append(line) }
         return
@@ -282,6 +637,7 @@ fun parseMarkdown(
     primaryColor: Color,
     accentYellow: Color,
     highlightBg: Color,
+    einkMode: Boolean = false,
     baseFontSize: androidx.compose.ui.unit.TextUnit = 16.sp
 ): AnnotatedString {
     return buildAnnotatedString {
@@ -295,14 +651,22 @@ fun parseMarkdown(
 
             if (trimmed.startsWith("```")) {
                 inCodeBlock = !inCodeBlock
-                withStyle(SpanStyle(color = mutedColor, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)) {
+                withStyle(SpanStyle(
+                    color = mutedColor,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    fontWeight = if (einkMode) FontWeight.Bold else null
+                )) {
                     append(trimmed)
                 }
                 continue
             }
 
             if (inCodeBlock) {
-                withStyle(SpanStyle(color = accentYellow, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)) {
+                withStyle(SpanStyle(
+                    color = accentYellow,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    background = if (einkMode) highlightBg else Color.Transparent
+                )) {
                     append(line)
                 }
                 continue
@@ -320,10 +684,20 @@ fun parseMarkdown(
                 // Strip block prefix for clean viewer rendering
                 val rest = line.substring(line.length - trimmed.length + contentStart)
                 if (rest.isNotBlank()) {
-                    appendInlineHighlighted(rest, baseStyle, mutedColor, accentYellow, highlightBg)
+                    when (role) {
+                        MdRole.Blockquote -> {
+                            withStyle(SpanStyle(color = mutedColor, fontWeight = FontWeight.Bold)) { append("> ") }
+                            appendInlineHighlighted(rest, baseStyle, mutedColor, accentYellow, highlightBg, einkMode)
+                        }
+                        MdRole.ListItem -> {
+                            withStyle(SpanStyle(color = textColor, fontWeight = FontWeight.Bold)) { append("- ") }
+                            appendInlineHighlighted(rest, baseStyle, mutedColor, accentYellow, highlightBg, einkMode)
+                        }
+                        else -> appendInlineHighlighted(rest, baseStyle, mutedColor, accentYellow, highlightBg, einkMode)
+                    }
                 }
             } else {
-                appendInlineHighlighted(line, baseStyle, mutedColor, accentYellow, highlightBg)
+                appendInlineHighlighted(line, baseStyle, mutedColor, accentYellow, highlightBg, einkMode)
             }
         }
     }
@@ -375,10 +749,11 @@ private data class InlineMatch(
     val contentStart: Int,
     val contentEnd: Int,
     val end: Int,
-    val style: SpanStyle
+    val style: SpanStyle,
+    val addEmphasisDots: Boolean = false
 )
 
-private fun findInlineMatches(line: String, accent: Color, highlightBg: Color): List<InlineMatch> {
+private fun findInlineMatches(line: String, accent: Color, highlightBg: Color, einkMode: Boolean): List<InlineMatch> {
     val len = line.length
     val result = mutableListOf<InlineMatch>()
     val used = BooleanArray(len)
@@ -386,7 +761,7 @@ private fun findInlineMatches(line: String, accent: Color, highlightBg: Color): 
 
     while (i < len) {
         if (used[i]) { i++; continue }
-        val m = matchAt(line, i, accent, highlightBg)
+        val m = matchAt(line, i, accent, highlightBg, einkMode)
         if (m != null && (m.start until m.end).none { used[it] }) {
             result.add(m)
             for (j in m.start until m.end) used[j] = true
@@ -399,7 +774,7 @@ private fun findInlineMatches(line: String, accent: Color, highlightBg: Color): 
     return result
 }
 
-private fun matchAt(line: String, i: Int, accent: Color, highlightBg: Color): InlineMatch? {
+private fun matchAt(line: String, i: Int, accent: Color, highlightBg: Color, einkMode: Boolean): InlineMatch? {
     val len = line.length
 
     // **bold**
@@ -425,7 +800,17 @@ private fun matchAt(line: String, i: Int, accent: Color, highlightBg: Color): In
         var e = i + 2
         while (e + 1 < len) {
             if (line[e] == '=' && line[e + 1] == '=' && (e + 2 >= len || line[e + 2] != '='))
-                return InlineMatch(i, i + 2, e, e + 2, SpanStyle(background = highlightBg))
+                return InlineMatch(
+                    i,
+                    i + 2,
+                    e,
+                    e + 2,
+                    SpanStyle(
+                        fontWeight = if (einkMode) FontWeight.SemiBold else null,
+                        background = if (einkMode) Color.Transparent else highlightBg
+                    ),
+                    addEmphasisDots = einkMode
+                )
             e++
         }
     }
@@ -466,9 +851,10 @@ private fun AnnotatedString.Builder.appendInlineHighlighted(
     baseStyle: SpanStyle,
     mutedColor: Color,
     accent: Color,
-    highlightBg: Color
+    highlightBg: Color,
+    einkMode: Boolean
 ) {
-    val matches = findInlineMatches(line, accent, highlightBg)
+    val matches = findInlineMatches(line, accent, highlightBg, einkMode)
     if (matches.isEmpty()) {
         withStyle(baseStyle) { append(line) }
         return
@@ -481,11 +867,23 @@ private fun AnnotatedString.Builder.appendInlineHighlighted(
             withStyle(baseStyle) { append(line.substring(pos, m.start)) }
         }
         // Styled content (markers are stripped in viewer mode)
-        withStyle(m.style) { append(line.substring(m.contentStart, m.contentEnd)) }
+        val content = line.substring(m.contentStart, m.contentEnd)
+        withStyle(m.style) {
+            append(if (m.addEmphasisDots) content.withBottomDots() else content)
+        }
         pos = m.end
     }
     // Remaining plain text
     if (pos < line.length) {
         withStyle(baseStyle) { append(line.substring(pos)) }
+    }
+}
+
+private fun String.withBottomDots(): String {
+    return buildString {
+        for (char in this@withBottomDots) {
+            append(char)
+            if (!char.isWhitespace()) append('\u0323')
+        }
     }
 }
