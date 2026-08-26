@@ -30,10 +30,14 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -54,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -86,6 +91,7 @@ fun HomeScreen(
     var showPasswordGate by remember { mutableStateOf(false) }
     var passwordInput by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf(false) }
+    var selectedLandscapeAction by remember { mutableStateOf("提示写作") }
 
     val openBrowser: () -> Unit = {
         if (encryptionEnabled && encryptionPassword.isNotBlank()) {
@@ -210,10 +216,26 @@ fun HomeScreen(
                 .onPreviewKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown) {
                         when (event.key) {
-                            Key.P -> { onPromptWrite(null); true }
-                            Key.F -> { onFreeWrite(); true }
-                            Key.V -> if (state.totalEntries > 0) { openBrowser(); true } else false
-                            Key.W -> { viewModel.syncWebDav(); true }
+                            Key.P -> {
+                                selectedLandscapeAction = "提示写作"
+                                onPromptWrite(null)
+                                true
+                            }
+                            Key.F -> {
+                                selectedLandscapeAction = "自由写作"
+                                onFreeWrite()
+                                true
+                            }
+                            Key.V -> if (state.totalEntries > 0) {
+                                selectedLandscapeAction = "查看过往日记"
+                                openBrowser()
+                                true
+                            } else false
+                            Key.W -> {
+                                selectedLandscapeAction = "同步到WebDAV"
+                                viewModel.syncWebDav()
+                                true
+                            }
                             Key.S -> { onSettings(); true }
                             Key.Escape, Key.Q -> { onExit(); true }
                             else -> false
@@ -274,23 +296,170 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(if (isLandscape) 16.dp else 48.dp))
 
             // Menu buttons
-            MenuButton("提示写作", einkMode = einkMode, onClick = {
-                @Suppress("DEPRECATION")
-                onPromptWrite(null) // null means pick from prompts
-            })
+            if (isLandscape) {
+                LandscapeMenu(
+                    selectedAction = selectedLandscapeAction,
+                    einkMode = einkMode,
+                    items = buildList {
+                        add(
+                            LandscapeMenuItem(
+                                label = "提示写作",
+                                shortcut = "p",
+                                icon = Icons.Outlined.AutoAwesome,
+                                onClick = {
+                                    selectedLandscapeAction = "提示写作"
+                                    @Suppress("DEPRECATION")
+                                    onPromptWrite(null) // null means pick from prompts
+                                }
+                            )
+                        )
+                        add(
+                            LandscapeMenuItem(
+                                label = "自由写作",
+                                shortcut = "f",
+                                icon = Icons.Outlined.EditNote,
+                                onClick = {
+                                    selectedLandscapeAction = "自由写作"
+                                    onFreeWrite()
+                                }
+                            )
+                        )
+                        if (state.totalEntries > 0) {
+                            add(
+                                LandscapeMenuItem(
+                                    label = "查看过往日记",
+                                    shortcut = "v",
+                                    icon = Icons.Outlined.History,
+                                    onClick = {
+                                        selectedLandscapeAction = "查看过往日记"
+                                        openBrowser()
+                                    }
+                                )
+                            )
+                        }
+                        add(
+                            LandscapeMenuItem(
+                                label = "同步到WebDAV",
+                                shortcut = "w",
+                                icon = Icons.Outlined.Sync,
+                                onClick = {
+                                    selectedLandscapeAction = "同步到WebDAV"
+                                    viewModel.syncWebDav()
+                                }
+                            )
+                        )
+                    }
+                )
+            } else {
+                MenuButton("提示写作", einkMode = einkMode, onClick = {
+                    @Suppress("DEPRECATION")
+                    onPromptWrite(null) // null means pick from prompts
+                })
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            MenuButton("自由写作", einkMode = einkMode, onClick = onFreeWrite)
-
-            if (state.totalEntries > 0) {
                 Spacer(modifier = Modifier.height(12.dp))
-                MenuButton("查看过往日记", einkMode = einkMode, onClick = openBrowser)
-            }
 
-            Spacer(modifier = Modifier.height(12.dp))
-            MenuButton("同步到WebDAV", einkMode = einkMode, onClick = { viewModel.syncWebDav() })
+                MenuButton("自由写作", einkMode = einkMode, onClick = onFreeWrite)
+
+                if (state.totalEntries > 0) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    MenuButton("查看过往日记", einkMode = einkMode, onClick = openBrowser)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                MenuButton("同步到WebDAV", einkMode = einkMode, onClick = { viewModel.syncWebDav() })
+            }
         }
+    }
+}
+
+private data class LandscapeMenuItem(
+    val label: String,
+    val shortcut: String,
+    val icon: ImageVector,
+    val onClick: () -> Unit
+)
+
+@Composable
+private fun LandscapeMenu(
+    selectedAction: String,
+    einkMode: Boolean,
+    items: List<LandscapeMenuItem>
+) {
+    val selectedItem = items.firstOrNull { it.label == selectedAction } ?: items.first()
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items.forEachIndexed { index, item ->
+                LandscapeMenuIconButton(
+                    item = item,
+                    selected = item.label == selectedItem.label,
+                    einkMode = einkMode
+                )
+                if (index != items.lastIndex) {
+                    Spacer(modifier = Modifier.width(16.dp))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(
+            text = "[${selectedItem.shortcut}]${selectedItem.label}",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
+private fun LandscapeMenuIconButton(
+    item: LandscapeMenuItem,
+    selected: Boolean,
+    einkMode: Boolean
+) {
+    val shape = RoundedCornerShape(10.dp)
+    val backgroundColor = when {
+        einkMode && selected -> MaterialTheme.colorScheme.onSurface
+        einkMode -> MaterialTheme.colorScheme.surface
+        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    }
+    val contentColor = when {
+        einkMode && selected -> MaterialTheme.colorScheme.surface
+        einkMode -> MaterialTheme.colorScheme.onSurface
+        selected -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+
+    Box(
+        modifier = Modifier
+            .size(56.dp)
+            .clip(shape)
+            .then(
+                if (einkMode) {
+                    Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, shape)
+                } else {
+                    Modifier
+                }
+            )
+            .background(backgroundColor)
+            .clickable(onClick = item.onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = item.icon,
+            contentDescription = item.label,
+            modifier = Modifier.size(28.dp),
+            tint = contentColor
+        )
     }
 }
 

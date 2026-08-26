@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pjournal.app.PJournalApp
 import com.pjournal.app.data.PreferencesManager
@@ -100,6 +101,11 @@ fun ViewerScreen(
         if (editorItalicFont == "default") null
         else fontManager.getFontFamily(editorItalicFont)
     }
+    val detailBodyStyle = MaterialTheme.typography.bodyLarge.copy(
+        fontFamily = fontFamily,
+        fontSize = 25.sp,
+        lineHeight = 38.sp
+    )
 
     LaunchedEffect(filename) {
         val entry = repository.getEntry(filename)
@@ -264,18 +270,18 @@ fun ViewerScreen(
                     accentYellow = MaterialTheme.colorScheme.tertiary,
                     highlightBg = if (einkMode) Color(0xFFE8E8E8) else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                     einkMode = einkMode,
-                    baseFontSize = MaterialTheme.typography.bodyLarge.fontSize,
+                    baseFontSize = detailBodyStyle.fontSize,
                     boldFontFamily = boldFontFamily,
                     italicFontFamily = italicFontFamily
                 )
                 Text(
                     text = markdownAnnotated,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontFamily = fontFamily)
+                    style = detailBodyStyle
                 )
             } else {
                 Text(
                     text = body,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontFamily = fontFamily),
+                    style = detailBodyStyle,
                     color = MaterialTheme.colorScheme.onBackground
                 )
             }
