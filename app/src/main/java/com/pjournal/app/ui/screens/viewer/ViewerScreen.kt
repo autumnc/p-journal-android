@@ -54,6 +54,7 @@ import com.pjournal.app.data.font.FontManager
 import com.pjournal.app.data.repository.JournalRepository
 import com.pjournal.app.network.FlomoApi
 import com.pjournal.app.ui.util.isCtrl
+import com.pjournal.app.util.applyFirstLineIndentForDisplay
 import com.pjournal.app.util.parseMarkdown
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -89,6 +90,7 @@ fun ViewerScreen(
     val editorFont by prefs.editorFont.collectAsStateWithLifecycle(initialValue = "default")
     val editorBoldFont by prefs.editorBoldFont.collectAsStateWithLifecycle(initialValue = "default")
     val editorItalicFont by prefs.editorItalicFont.collectAsStateWithLifecycle(initialValue = "default")
+    val firstLineIndent by prefs.firstLineIndent.collectAsStateWithLifecycle(initialValue = false)
     val fontFamily = remember(editorFont, importedFonts) {
         if (editorFont == "default") FontFamily.Default
         else fontManager.getFontFamily(editorFont) ?: FontFamily.Default
@@ -272,7 +274,8 @@ fun ViewerScreen(
                     einkMode = einkMode,
                     baseFontSize = detailBodyStyle.fontSize,
                     boldFontFamily = boldFontFamily,
-                    italicFontFamily = italicFontFamily
+                    italicFontFamily = italicFontFamily,
+                    firstLineIndent = firstLineIndent
                 )
                 Text(
                     text = markdownAnnotated,
@@ -280,7 +283,7 @@ fun ViewerScreen(
                 )
             } else {
                 Text(
-                    text = body,
+                    text = if (firstLineIndent) applyFirstLineIndentForDisplay(body) else body,
                     style = detailBodyStyle,
                     color = MaterialTheme.colorScheme.onBackground
                 )

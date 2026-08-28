@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pjournal.app.data.BuiltInPrompts
 import com.pjournal.app.data.PreferencesManager
+import com.pjournal.app.data.db.JournalHistoryEntity
 import com.pjournal.app.data.repository.JournalRepository
 import com.pjournal.app.network.DeepseekApi
 import com.pjournal.app.network.FlomoApi
@@ -23,7 +24,8 @@ data class EditorState(
 
 class EditorViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = JournalRepository(
-        com.pjournal.app.PJournalApp.instance.database.journalEntryDao()
+        com.pjournal.app.PJournalApp.instance.database.journalEntryDao(),
+        com.pjournal.app.PJournalApp.instance.database.journalHistoryDao()
     )
     private val prefs = PreferencesManager(application)
     private val deepseekApi = DeepseekApi()
@@ -90,7 +92,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     suspend fun updateEntry(filename: String, text: String) {
         val prompt = _state.value.prompt
         val fileFormat = prefs.fileFormat.first()
-        val newFilename = repository.updateEntry(filename, text, prompt, fileFormat)
+        val createHistory = prefs.versionHistory.first()
+        val newFilename = repository.updateEntry(filename, text, prompt, fileFormat, createHistory)
         _state.value = _state.value.copy(prompt = null)
         triggerSync()
     }
@@ -99,6 +102,26 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         val entry = repository.getEntry(filename) ?: return null
         _state.value = _state.value.copy(prompt = entry.prompt)
         return repository.extractBody(entry.content)
+    }
+
+    suspend fun getHistory(filename: String): List<JournalHistoryEntity> {
+        return repository.getHistory(filename)
+    }
+
+    suspend fun loadHistoryBody(id: Long): String? {
+        val version = repository.getHistoryVersion(id) ?: return null
+        return repository.extractBody(version.content)
+    }
+
+    suspend fun restoreHistoryVersion(filename: String, id: Long): String? {
+        val ok = repository.restoreHistoryVersion(filename, id)
+        if (!ok) return null
+        triggerSync()
+        return loadEntryForEdit(filename)
+    }
+
+    suspend fun deleteHistoryVersion(id: Long) {
+        repository.deleteHistoryVersion(id)
     }
 
     private fun triggerSync() {

@@ -2,13 +2,18 @@ package com.pjournal.app.data.repository
 
 import com.pjournal.app.data.db.JournalEntryDao
 import com.pjournal.app.data.db.JournalEntryEntity
+import com.pjournal.app.data.db.JournalHistoryDao
+import com.pjournal.app.data.db.JournalHistoryEntity
 import kotlinx.coroutines.flow.Flow
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class JournalRepository(private val dao: JournalEntryDao) {
+class JournalRepository(
+    private val dao: JournalEntryDao,
+    private val historyDao: JournalHistoryDao? = null
+) {
 
     fun getAllEntries(): Flow<List<JournalEntryEntity>> = dao.getAllEntries()
 
@@ -62,6 +67,7 @@ class JournalRepository(private val dao: JournalEntryDao) {
 
     suspend fun deleteEntry(filename: String) {
         dao.deleteEntry(filename)
+        historyDao?.deleteHistoryForEntry(filename)
     }
 
     suspend fun getStreak(): Int {
@@ -124,7 +130,13 @@ class JournalRepository(private val dao: JournalEntryDao) {
         dao.insertEntry(entity)
     }
 
-    suspend fun updateEntry(filename: String, text: String, prompt: String? = null, fileFormat: String = "txt"): String {
+    suspend fun updateEntry(
+        filename: String,
+        text: String,
+        prompt: String? = null,
+        fileFormat: String = "txt",
+        createHistory: Boolean = false
+    ): String {
         val existing = dao.getEntry(filename)
         val now = System.currentTimeMillis()
         val createdAt = existing?.createdAt ?: now
@@ -155,6 +167,10 @@ class JournalRepository(private val dao: JournalEntryDao) {
         val fullContent = header + text
         val checksum = computeMd5(fullContent)
 
+        if (createHistory && existing != null && existing.content != fullContent) {
+            saveHistorySnapshot(newFilename, existing.content, now)
+        }
+
         val entry = JournalEntryEntity(
             filename = newFilename,
             content = fullContent,
@@ -171,6 +187,45 @@ class JournalRepository(private val dao: JournalEntryDao) {
         }
         dao.insertEntry(entry)
         return newFilename
+    }
+
+    suspend fun getHistory(filename: String): List<JournalHistoryEntity> {
+        return historyDao?.getHistory(filename) ?: emptyList()
+    }
+
+    suspend fun getHistoryVersion(id: Long): JournalHistoryEntity? {
+        return historyDao?.getHistoryVersion(id)
+    }
+
+    suspend fun deleteHistoryVersion(id: Long) {
+        historyDao?.deleteHistoryVersion(id)
+    }
+
+    suspend fun restoreHistoryVersion(filename: String, historyId: Long): Boolean {
+        val history = historyDao?.getHistoryVersion(historyId) ?: return false
+        val existing = dao.getEntry(filename)
+        val now = System.currentTimeMillis()
+        if (existing != null && existing.content != history.content) {
+            saveHistorySnapshot(filename, existing.content, now)
+        }
+        insertEntry(filename, history.content, updatedAt = now)
+        return true
+    }
+
+    private suspend fun saveHistorySnapshot(filename: String, content: String, timestamp: Long) {
+        val historyDao = historyDao ?: return
+        val checksum = computeMd5(content)
+        val newest = historyDao.getHistory(filename).firstOrNull()
+        if (newest?.checksum == checksum || newest?.content == content) return
+        historyDao.insertHistory(
+            JournalHistoryEntity(
+                filename = filename,
+                content = content,
+                createdAt = timestamp,
+                checksum = checksum
+            )
+        )
+        historyDao.trimHistory(filename, 10)
     }
 
     fun extractBody(content: String): String {

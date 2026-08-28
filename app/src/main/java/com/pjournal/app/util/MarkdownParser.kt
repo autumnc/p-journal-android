@@ -128,7 +128,8 @@ fun renderMarkdownForEditor(
     baseFontSize: androidx.compose.ui.unit.TextUnit = 16.sp,
     customFontBoldBoost: Boolean = false,
     boldFontFamily: FontFamily? = null,
-    italicFontFamily: FontFamily? = null
+    italicFontFamily: FontFamily? = null,
+    firstLineIndent: Boolean = false
 ): TransformedText {
     val sourceToTransformed = IntArray(text.length + 1)
     val transformedToSource = mutableListOf<Int>()
@@ -234,6 +235,14 @@ fun renderMarkdownForEditor(
                     transformedToSource = transformedToSource
                 )
             } else {
+                if (firstLineIndent && shouldApplyFirstLineIndent(line, inCodeBlock)) {
+                    appendInsertedText(
+                        value = FirstLineIndentText,
+                        sourceOffset = lineStart,
+                        style = SpanStyle(color = textColor),
+                        transformedToSource = transformedToSource
+                    )
+                }
                 appendEditorRenderedInline(
                     source = text,
                     start = lineStart,
@@ -689,7 +698,8 @@ fun parseMarkdown(
     einkMode: Boolean = false,
     baseFontSize: androidx.compose.ui.unit.TextUnit = 16.sp,
     boldFontFamily: FontFamily? = null,
-    italicFontFamily: FontFamily? = null
+    italicFontFamily: FontFamily? = null,
+    firstLineIndent: Boolean = false
 ): AnnotatedString {
     return buildAnnotatedString {
         val lines = text.split('\n')
@@ -748,10 +758,44 @@ fun parseMarkdown(
                     }
                 }
             } else {
+                if (firstLineIndent && shouldApplyFirstLineIndent(line, inCodeBlock)) {
+                    withStyle(SpanStyle(color = textColor)) { append(FirstLineIndentText) }
+                }
                 appendInlineHighlighted(line, baseStyle, mutedColor, accentYellow, highlightBg, einkMode, boldFontFamily, italicFontFamily)
             }
         }
     }
+}
+
+fun applyFirstLineIndentForDisplay(text: String): String {
+    var inCodeBlock = false
+    return text.split('\n').joinToString("\n") { line ->
+        val trimmed = line.trimStart()
+        if (trimmed.startsWith("```")) {
+            inCodeBlock = !inCodeBlock
+            line
+        } else if (shouldApplyFirstLineIndent(line, inCodeBlock)) {
+            FirstLineIndentText + line
+        } else {
+            line
+        }
+    }
+}
+
+private const val FirstLineIndentText = "　　"
+
+private fun shouldApplyFirstLineIndent(line: String, inCodeBlock: Boolean): Boolean {
+    if (inCodeBlock || line.isBlank()) return false
+    if (line.startsWith(FirstLineIndentText)) return false
+    val trimmed = line.trimStart(' ', '\t', '　')
+    if (trimmed.isBlank()) return false
+    val (role, _) = detectBlockRole(trimmed)
+    if (role != MdRole.Normal) return false
+    if (trimmed == "---" || trimmed == "***" || trimmed == "___") return false
+    if (trimmed.startsWith("+ ")) return false
+    if (Regex("""^\d+[.)、]\s+.*""").matches(trimmed)) return false
+    if (Regex("""^[一二三四五六七八九十]+、.*""").matches(trimmed)) return false
+    return true
 }
 
 enum class MdRole {

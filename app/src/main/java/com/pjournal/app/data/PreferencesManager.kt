@@ -42,6 +42,8 @@ class PreferencesManager(private val context: Context) {
         private val KEY_EDITOR_ITALIC_FONT = stringPreferencesKey("editor_italic_font")
         private val KEY_EDITOR_FONT_SIZE = stringPreferencesKey("editor_font_size")
         private val KEY_MARKDOWN_ENABLED = booleanPreferencesKey("markdown_enabled")
+        private val KEY_VERSION_HISTORY = booleanPreferencesKey("version_history")
+        private val KEY_FIRST_LINE_INDENT = booleanPreferencesKey("first_line_indent")
         private val KEY_FILE_FORMAT = stringPreferencesKey("file_format")
         private val KEY_CONFIG_VERSION = longPreferencesKey("config_version")
     }
@@ -70,6 +72,8 @@ class PreferencesManager(private val context: Context) {
         json.put("editor_italic_font", prefs[KEY_EDITOR_ITALIC_FONT] ?: "default")
         json.put("editor_font_size", prefs[KEY_EDITOR_FONT_SIZE] ?: "16")
         json.put("markdown_enabled", prefs[KEY_MARKDOWN_ENABLED] ?: false)
+        json.put("version_history", prefs[KEY_VERSION_HISTORY] ?: false)
+        json.put("first_line_indent", prefs[KEY_FIRST_LINE_INDENT] ?: false)
         json.put("file_format", prefs[KEY_FILE_FORMAT] ?: "txt")
         json.put("config_version", prefs[KEY_CONFIG_VERSION] ?: 0L)
         return json.toString()
@@ -98,6 +102,8 @@ class PreferencesManager(private val context: Context) {
             if (json.has("editor_italic_font")) prefs[KEY_EDITOR_ITALIC_FONT] = json.getString("editor_italic_font")
             if (json.has("editor_font_size")) prefs[KEY_EDITOR_FONT_SIZE] = json.getString("editor_font_size")
             if (json.has("markdown_enabled")) prefs[KEY_MARKDOWN_ENABLED] = json.getBoolean("markdown_enabled")
+            if (json.has("version_history")) prefs[KEY_VERSION_HISTORY] = json.getBoolean("version_history")
+            if (json.has("first_line_indent")) prefs[KEY_FIRST_LINE_INDENT] = json.getBoolean("first_line_indent")
             if (json.has("file_format")) prefs[KEY_FILE_FORMAT] = json.getString("file_format")
             if (json.has("config_version")) prefs[KEY_CONFIG_VERSION] = json.getLong("config_version")
         }
@@ -151,6 +157,14 @@ class PreferencesManager(private val context: Context) {
         prefs[KEY_MARKDOWN_ENABLED] ?: false
     }
 
+    val versionHistory: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_VERSION_HISTORY] ?: false
+    }
+
+    val firstLineIndent: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_FIRST_LINE_INDENT] ?: false
+    }
+
     val fileFormat: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[KEY_FILE_FORMAT] ?: "txt"
     }
@@ -200,6 +214,20 @@ class PreferencesManager(private val context: Context) {
     suspend fun setMarkdownEnabled(enabled: Boolean) {
         context.dataStore.edit {
             it[KEY_MARKDOWN_ENABLED] = enabled
+            it[KEY_CONFIG_VERSION] = (it[KEY_CONFIG_VERSION] ?: 0L) + 1
+        }
+    }
+
+    suspend fun setVersionHistory(enabled: Boolean) {
+        context.dataStore.edit {
+            it[KEY_VERSION_HISTORY] = enabled
+            it[KEY_CONFIG_VERSION] = (it[KEY_CONFIG_VERSION] ?: 0L) + 1
+        }
+    }
+
+    suspend fun setFirstLineIndent(enabled: Boolean) {
+        context.dataStore.edit {
+            it[KEY_FIRST_LINE_INDENT] = enabled
             it[KEY_CONFIG_VERSION] = (it[KEY_CONFIG_VERSION] ?: 0L) + 1
         }
     }
@@ -298,6 +326,8 @@ class PreferencesManager(private val context: Context) {
             "force_landscape" -> forceLandscape
             "encryption_enabled" -> encryptionEnabled
             "markdown_enabled" -> markdownEnabled
+            "version_history" -> versionHistory
+            "first_line_indent" -> firstLineIndent
             else -> throw IllegalArgumentException("Unknown boolean key: $key")
         }
     }
@@ -310,6 +340,8 @@ class PreferencesManager(private val context: Context) {
             "force_landscape" -> setForceLandscape(value)
             "encryption_enabled" -> setEncryptionEnabled(value)
             "markdown_enabled" -> setMarkdownEnabled(value)
+            "version_history" -> setVersionHistory(value)
+            "first_line_indent" -> setFirstLineIndent(value)
         }
     }
 }

@@ -36,7 +36,8 @@ data class BrowserState(
 
 class BrowserViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = JournalRepository(
-        PJournalApp.instance.database.journalEntryDao()
+        PJournalApp.instance.database.journalEntryDao(),
+        PJournalApp.instance.database.journalHistoryDao()
     )
     private val prefs = PreferencesManager(application)
     private val flomoApi = FlomoApi()

@@ -27,6 +27,8 @@ import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.FormatIndentIncrease
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.StayCurrentLandscape
@@ -274,6 +276,16 @@ fun SettingsScreen(
             FileFormatCard(
                 format = state.fileFormat,
                 onToggle = { viewModel.setFileFormat(it) }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            VersionHistoryCard(
+                enabled = state.versionHistory,
+                onToggle = { viewModel.setVersionHistory(it) }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FirstLineIndentCard(
+                enabled = state.firstLineIndent,
+                onToggle = { viewModel.setFirstLineIndent(it) }
             )
             Spacer(modifier = Modifier.height(8.dp))
             EncryptionCard(
@@ -640,6 +652,84 @@ private fun FileFormatCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun VersionHistoryCard(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Outlined.History,
+            contentDescription = null,
+            tint = if (enabled)
+                MaterialTheme.colorScheme.primary
+            else
+                MaterialTheme.colorScheme.outline
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "版本历史",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = if (enabled) "编辑保存前保留最近 10 个历史版本" else "保存时不生成历史版本",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+        Switch(
+            checked = enabled,
+            onCheckedChange = onToggle
+        )
+    }
+}
+
+@Composable
+private fun FirstLineIndentCard(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Outlined.FormatIndentIncrease,
+            contentDescription = null,
+            tint = if (enabled)
+                MaterialTheme.colorScheme.primary
+            else
+                MaterialTheme.colorScheme.outline
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "首行缩进",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = if (enabled) "普通段落新起一行时自动缩进两个中文字符" else "新段落不自动缩进",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+        Switch(
+            checked = enabled,
+            onCheckedChange = onToggle
+        )
     }
 }
 

@@ -35,6 +35,8 @@ data class SettingsState(
     val editorBoldFont: String = "default",
     val editorItalicFont: String = "default",
     val editorFontSize: String = "16",
+    val versionHistory: Boolean = false,
+    val firstLineIndent: Boolean = false,
     val fileFormat: String = "txt",
     val importedFonts: List<ImportedFont> = emptyList(),
     val isImportingFont: Boolean = false,
@@ -70,6 +72,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 editorBoldFont = prefs.editorBoldFont.first(),
                 editorItalicFont = prefs.editorItalicFont.first(),
                 editorFontSize = prefs.editorFontSize.first(),
+                versionHistory = prefs.versionHistory.first(),
+                firstLineIndent = prefs.firstLineIndent.first(),
                 fileFormat = prefs.fileFormat.first(),
                 importedFonts = fontManager.importedFonts.value
             )
@@ -136,6 +140,20 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setFileFormat(format: String) {
         viewModelScope.launch {
             prefs.setFileFormat(format)
+            refreshState()
+        }
+    }
+
+    fun setVersionHistory(enabled: Boolean) {
+        viewModelScope.launch {
+            prefs.setVersionHistory(enabled)
+            refreshState()
+        }
+    }
+
+    fun setFirstLineIndent(enabled: Boolean) {
+        viewModelScope.launch {
+            prefs.setFirstLineIndent(enabled)
             refreshState()
         }
     }
@@ -209,6 +227,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             editorBoldFont = prefs.editorBoldFont.first(),
             editorItalicFont = prefs.editorItalicFont.first(),
             editorFontSize = prefs.editorFontSize.first(),
+            versionHistory = prefs.versionHistory.first(),
+            firstLineIndent = prefs.firstLineIndent.first(),
             fileFormat = prefs.fileFormat.first(),
             importedFonts = fontManager.importedFonts.value
         )

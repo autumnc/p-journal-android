@@ -35,11 +35,13 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +55,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -86,6 +89,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pjournal.app.data.PreferencesManager
+import com.pjournal.app.data.db.JournalHistoryEntity
 import com.pjournal.app.data.font.FontManager
 import com.pjournal.app.ui.util.isCtrl
 import com.pjournal.app.util.renderMarkdownForEditor
@@ -119,10 +123,17 @@ fun EditorScreen(
     var showDiscardDialog by remember { mutableStateOf(false) }
     var showShortcutHelp by remember { mutableStateOf(false) }
     var showFindReplace by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
+    var historyVersions by remember { mutableStateOf<List<JournalHistoryEntity>>(emptyList()) }
+    var historyPreview by remember { mutableStateOf<Pair<JournalHistoryEntity, String>?>(null) }
+    var historyRestoreTarget by remember { mutableStateOf<JournalHistoryEntity?>(null) }
+    var historyDeleteTarget by remember { mutableStateOf<JournalHistoryEntity?>(null) }
     var selAnchor by remember { mutableStateOf<Int?>(null) }
     var shiftDown by remember { mutableStateOf(false) }
     var wordCount by remember { mutableStateOf(0) }
     var showPrompt by remember { mutableStateOf(true) }
+    val undoStack = remember(editFilename) { mutableStateListOf<TextFieldValue>() }
+    val redoStack = remember(editFilename) { mutableStateListOf<TextFieldValue>() }
 
     val currentPrompt = state.prompt ?: promptText
     val prefs = remember { PreferencesManager(context) }
@@ -147,6 +158,7 @@ fun EditorScreen(
     val editorBoldFont by prefs.editorBoldFont.collectAsStateWithLifecycle(initialValue = "default")
     val editorItalicFont by prefs.editorItalicFont.collectAsStateWithLifecycle(initialValue = "default")
     val editorFontSize by prefs.editorFontSize.collectAsStateWithLifecycle(initialValue = "16")
+    val firstLineIndent by prefs.firstLineIndent.collectAsStateWithLifecycle(initialValue = false)
     val fontFamily = remember(editorFont, importedFonts) {
         if (editorFont == "default") FontFamily.Default
         else fontManager.getFontFamily(editorFont) ?: FontFamily.Default
@@ -168,7 +180,7 @@ fun EditorScreen(
     val mdAccentColor = MaterialTheme.colorScheme.tertiary
     val mdHighlightBg = if (einkMode) Color(0xFFE8E8E8) else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
 
-    val mdHighlightTransform = remember(editorFont, boldFontFamily, italicFontFamily, mdTextColor, mdMutedColor, mdPrimaryColor, mdAccentColor, mdHighlightBg, einkMode, fontSize) {
+    val mdHighlightTransform = remember(editorFont, boldFontFamily, italicFontFamily, mdTextColor, mdMutedColor, mdPrimaryColor, mdAccentColor, mdHighlightBg, einkMode, fontSize, firstLineIndent) {
         VisualTransformation { annotatedString ->
             renderMarkdownForEditor(
                 text = annotatedString.text,
@@ -181,7 +193,8 @@ fun EditorScreen(
                 baseFontSize = fontSize,
                 customFontBoldBoost = editorFont != "default",
                 boldFontFamily = boldFontFamily,
-                italicFontFamily = italicFontFamily
+                italicFontFamily = italicFontFamily,
+                firstLineIndent = firstLineIndent
             )
         }
     }
@@ -228,6 +241,35 @@ fun EditorScreen(
     LaunchedEffect(textState.text) {
         wordCount = textState.text.count { it in '一'..'鿿' || it in '　'..'〿' || it in '＀'..'￯' } +
             Regex("[a-zA-Z]+").findAll(textState.text).count()
+    }
+
+    fun recordUndoSnapshot() {
+        if (undoStack.lastOrNull() == textState) return
+        undoStack.add(textState)
+        if (undoStack.size > 100) undoStack.removeAt(0)
+        redoStack.clear()
+    }
+
+    fun applyEdit(value: TextFieldValue, recordUndo: Boolean = true) {
+        if (recordUndo && value != textState) recordUndoSnapshot()
+        textState = value
+        selAnchor = null
+    }
+
+    fun undoEdit(): Boolean {
+        val previous = undoStack.removeLastOrNull() ?: return false
+        redoStack.add(textState)
+        textState = previous
+        selAnchor = null
+        return true
+    }
+
+    fun redoEdit(): Boolean {
+        val next = redoStack.removeLastOrNull() ?: return false
+        undoStack.add(textState)
+        textState = next
+        selAnchor = null
+        return true
     }
 
     fun shiftSelect(step: Int) {
@@ -304,6 +346,25 @@ fun EditorScreen(
                 viewModel.generateAiPrompt()
                 true
             }
+            ctrl && key == Key.Z && shift -> {
+                if (!redoEdit()) viewModel.setMessage("没有可重做内容")
+                true
+            }
+            ctrl && key == Key.Z -> {
+                if (!undoEdit()) viewModel.setMessage("没有可撤销内容")
+                true
+            }
+            ctrl && key == Key.Y -> {
+                if (editFilename != null) {
+                    scope.launch {
+                        historyVersions = viewModel.getHistory(editFilename)
+                        showHistory = true
+                    }
+                } else {
+                    viewModel.setMessage("新日记保存后才有历史版本")
+                }
+                true
+            }
             ctrl && key == Key.F -> {
                 scope.launch { if (textState.text.isNotBlank()) viewModel.sendToFlomo(textState.text) }
                 true
@@ -316,11 +377,11 @@ fun EditorScreen(
                 showFindReplace = true
                 true
             }
-            ctrl && key == Key.B -> { textState = textState.insertMarkers("**"); selAnchor = null; true }
-            ctrl && key == Key.T -> { textState = textState.insertMarkers("*"); selAnchor = null; true }
-            ctrl && key == Key.D -> { textState = textState.insertMarkers("~~"); selAnchor = null; true }
-            ctrl && key == Key.H -> { textState = textState.insertMarkers("=="); selAnchor = null; true }
-            ctrl && key == Key.U -> { textState = textState.insertMarkers("<u>", "</u>"); selAnchor = null; true }
+            ctrl && key == Key.B -> { applyEdit(textState.insertMarkers("**")); true }
+            ctrl && key == Key.T -> { applyEdit(textState.insertMarkers("*")); true }
+            ctrl && key == Key.D -> { applyEdit(textState.insertMarkers("~~")); true }
+            ctrl && key == Key.H -> { applyEdit(textState.insertMarkers("==")); true }
+            ctrl && key == Key.U -> { applyEdit(textState.insertMarkers("<u>", "</u>")); true }
             ctrl && key == Key.O -> {
                 val sel = textState.selection
                 val s = minOf(sel.start, sel.end)
@@ -332,22 +393,21 @@ fun EditorScreen(
                     scope.launch {
                         val polished = viewModel.polishSelected(selected)
                         if (polished != null && polished != selected) {
-                            textState = textState.copy(
+                            applyEdit(textState.copy(
                                 text = textState.text.replaceRange(s, e, polished),
                                 selection = TextRange(s, s + polished.length)
-                            )
-                            selAnchor = null
+                            ))
                         }
                     }
                 }
                 true
             }
-            key == Key.F1 -> { textState = textState.applyHeading(1); selAnchor = null; true }
-            key == Key.F2 -> { textState = textState.applyHeading(2); selAnchor = null; true }
-            key == Key.F3 -> { textState = textState.applyHeading(3); selAnchor = null; true }
-            key == Key.F4 -> { textState = textState.applyHeading(4); selAnchor = null; true }
-            key == Key.F5 -> { textState = textState.applyHeading(5); selAnchor = null; true }
-            key == Key.F6 -> { textState = textState.applyHeading(6); selAnchor = null; true }
+            key == Key.F1 -> { applyEdit(textState.applyHeading(1)); true }
+            key == Key.F2 -> { applyEdit(textState.applyHeading(2)); true }
+            key == Key.F3 -> { applyEdit(textState.applyHeading(3)); true }
+            key == Key.F4 -> { applyEdit(textState.applyHeading(4)); true }
+            key == Key.F5 -> { applyEdit(textState.applyHeading(5)); true }
+            key == Key.F6 -> { applyEdit(textState.applyHeading(6)); true }
             key == Key.Escape -> {
                 if (textState.text.isNotBlank()) showDiscardDialog = true else onNavigateBack()
                 true
@@ -385,6 +445,7 @@ fun EditorScreen(
             text = {
                 Column {
                     Text("^S 保存 · ^Q/Esc 放弃 · ^K 帮助")
+                    Text("^Z 撤销 · ^Shift+Z 重做 · ^Y 历史版本")
                     Text("^B 加粗 ** · ^T 斜体 * · ^D 删除线 ~~")
                     Text("^U 下划线 <u> · ^H 高亮 ==")
                     Text("F1-F6 标题 1-6")
@@ -404,14 +465,88 @@ fun EditorScreen(
         FindReplaceDialog(
             text = textState.text,
             onApply = { newText, selection ->
-                textState = if (selection != null) {
+                applyEdit(if (selection != null) {
                     TextFieldValue(newText, selection = selection)
                 } else {
                     TextFieldValue(newText)
-                }
-                selAnchor = null
+                })
             },
             onDismiss = { showFindReplace = false }
+        )
+    }
+
+    if (showHistory && editFilename != null) {
+        HistoryDialog(
+            versions = historyVersions,
+            onPreview = { version ->
+                scope.launch {
+                    val body = viewModel.loadHistoryBody(version.id)
+                    if (body != null) historyPreview = version to body
+                }
+            },
+            onRestore = { historyRestoreTarget = it },
+            onDelete = { historyDeleteTarget = it },
+            onDismiss = { showHistory = false }
+        )
+    }
+
+    historyPreview?.let { (version, body) ->
+        HistoryPreviewDialog(
+            version = version,
+            body = body,
+            onDismiss = { historyPreview = null },
+            onRestore = {
+                historyPreview = null
+                historyRestoreTarget = version
+            }
+        )
+    }
+
+    historyRestoreTarget?.let { version ->
+        AlertDialog(
+            onDismissRequest = { historyRestoreTarget = null },
+            title = { Text("恢复历史版本？") },
+            text = { Text("当前内容会先保存为一个历史版本，然后恢复所选版本。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        val restored = viewModel.restoreHistoryVersion(editFilename!!, version.id)
+                        if (restored != null) {
+                            applyEdit(TextFieldValue(restored), recordUndo = false)
+                            undoStack.clear()
+                            redoStack.clear()
+                            historyVersions = viewModel.getHistory(editFilename)
+                            viewModel.setMessage("已恢复历史版本")
+                        } else {
+                            viewModel.setMessage("恢复失败")
+                        }
+                        historyRestoreTarget = null
+                    }
+                }) { Text("恢复") }
+            },
+            dismissButton = {
+                TextButton(onClick = { historyRestoreTarget = null }) { Text("取消") }
+            }
+        )
+    }
+
+    historyDeleteTarget?.let { version ->
+        AlertDialog(
+            onDismissRequest = { historyDeleteTarget = null },
+            title = { Text("删除历史版本？") },
+            text = { Text("此操作只删除所选历史版本，不影响当前日记。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        viewModel.deleteHistoryVersion(version.id)
+                        historyVersions = viewModel.getHistory(editFilename!!)
+                        historyDeleteTarget = null
+                    }
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { historyDeleteTarget = null }) { Text("取消") }
+            }
         )
     }
 
@@ -494,6 +629,16 @@ fun EditorScreen(
                             }
                         }
                     }
+                    if (editFilename != null) {
+                        IconButton(onClick = {
+                            scope.launch {
+                                historyVersions = viewModel.getHistory(editFilename)
+                                showHistory = true
+                            }
+                        }) {
+                            Icon(Icons.Outlined.History, "历史版本")
+                        }
+                    }
                     IconButton(onClick = {
                         if (textState.text.isNotBlank()) {
                             scope.launch {
@@ -555,7 +700,9 @@ fun EditorScreen(
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 BasicTextField(
                     value = textState,
-                    onValueChange = { textState = it; selAnchor = null },
+                    onValueChange = { value ->
+                        applyEdit(value)
+                    },
                     modifier = Modifier
                         .fillMaxSize()
                         .onPreviewKeyEvent { handleEditorKey(it) }
@@ -759,6 +906,115 @@ private fun TextFieldValue.applyHeading(level: Int): TextFieldValue {
     val newLine = "#".repeat(level) + " " + content
     val newText = text.replaceRange(lineStart, lineEnd, newLine)
     return copy(text = newText, selection = TextRange(lineStart + newLine.length))
+}
+
+@Composable
+private fun HistoryDialog(
+    versions: List<JournalHistoryEntity>,
+    onPreview: (JournalHistoryEntity) -> Unit,
+    onRestore: (JournalHistoryEntity) -> Unit,
+    onDelete: (JournalHistoryEntity) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("历史版本") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                if (versions.isEmpty()) {
+                    Text(
+                        text = "暂无历史版本",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                } else {
+                    versions.forEach { version ->
+                        HistoryVersionRow(
+                            version = version,
+                            onPreview = { onPreview(version) },
+                            onRestore = { onRestore(version) },
+                            onDelete = { onDelete(version) }
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        }
+    )
+}
+
+@Composable
+private fun HistoryVersionRow(
+    version: JournalHistoryEntity,
+    onPreview: () -> Unit,
+    onRestore: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val label = remember(version.createdAt) {
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(version.createdAt))
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
+        Text(
+            text = "${version.content.toByteArray(Charsets.UTF_8).size} B",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            TextButton(onClick = onPreview) { Text("预览") }
+            TextButton(onClick = onRestore) { Text("恢复") }
+            TextButton(onClick = onDelete) {
+                Text("删除", color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryPreviewDialog(
+    version: JournalHistoryEntity,
+    body: String,
+    onDismiss: () -> Unit,
+    onRestore: () -> Unit
+) {
+    val label = remember(version.createdAt) {
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(version.createdAt))
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(label) },
+        text = {
+            Text(
+                text = body.ifBlank { "内容为空" },
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState())
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onRestore) { Text("恢复") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        }
+    )
 }
 
 @Composable
