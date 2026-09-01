@@ -129,7 +129,8 @@ fun renderMarkdownForEditor(
     customFontBoldBoost: Boolean = false,
     boldFontFamily: FontFamily? = null,
     italicFontFamily: FontFamily? = null,
-    firstLineIndent: Boolean = false
+    firstLineIndent: Boolean = false,
+    cursorOffset: Int = -1
 ): TransformedText {
     val sourceToTransformed = IntArray(text.length + 1)
     val transformedToSource = mutableListOf<Int>()
@@ -157,7 +158,22 @@ fun renderMarkdownForEditor(
             if (trimmed.startsWith("```")) {
                 inCodeBlock = !inCodeBlock
                 val fenceStart = lineStart + leadingWs
-                hideSourceRange(fenceStart, lineStart + line.length, sourceToTransformed, length)
+                if (cursorOffset in fenceStart..(lineStart + line.length)) {
+                    appendMappedRange(
+                        source = text,
+                        start = lineStart,
+                        end = lineStart + line.length,
+                        style = SpanStyle(
+                            color = primaryColor,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontWeight = if (einkMode) FontWeight.Bold else null
+                        ),
+                        sourceToTransformed = sourceToTransformed,
+                        transformedToSource = transformedToSource
+                    )
+                } else {
+                    hideSourceRange(fenceStart, lineStart + line.length, sourceToTransformed, length)
+                }
                 sourceLineStart += line.length + 1
                 continue
             }
@@ -195,29 +211,44 @@ fun renderMarkdownForEditor(
             val contentStart = prefixStart + prefixLen
             val lineEnd = lineStart + line.length
             val blockStyle = editorRenderedBlockStyle(role, textColor, mutedColor, primaryColor, highlightBg, einkMode, baseFontSize, boldFontFamily, italicFontFamily)
+            val revealBlockPrefix = prefixLen > 0 && cursorOffset in prefixStart..lineEnd
 
             if (prefixLen > 0) {
-                hideSourceRange(prefixStart, contentStart, sourceToTransformed, length)
-                when (role) {
-                    MdRole.Blockquote -> appendInsertedText(
-                        value = "▌ ",
-                        sourceOffset = prefixStart,
+                if (revealBlockPrefix) {
+                    appendMappedRange(
+                        source = text,
+                        start = prefixStart,
+                        end = contentStart,
                         style = SpanStyle(
-                            color = if (einkMode) Color.Black else primaryColor,
-                            fontWeight = FontWeight.Black
+                            color = primaryColor,
+                            fontWeight = if (einkMode) FontWeight.Black else FontWeight.Bold
                         ),
+                        sourceToTransformed = sourceToTransformed,
                         transformedToSource = transformedToSource
                     )
-                    MdRole.ListItem -> appendInsertedText(
-                        value = "• ",
-                        sourceOffset = prefixStart,
-                        style = SpanStyle(
-                            color = if (einkMode) Color.Black else primaryColor,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        transformedToSource = transformedToSource
-                    )
-                    else -> Unit
+                } else {
+                    hideSourceRange(prefixStart, contentStart, sourceToTransformed, length)
+                    when (role) {
+                        MdRole.Blockquote -> appendInsertedText(
+                            value = "▌ ",
+                            sourceOffset = prefixStart,
+                            style = SpanStyle(
+                                color = if (einkMode) Color.Black else primaryColor,
+                                fontWeight = FontWeight.Black
+                            ),
+                            transformedToSource = transformedToSource
+                        )
+                        MdRole.ListItem -> appendInsertedText(
+                            value = "• ",
+                            sourceOffset = prefixStart,
+                            style = SpanStyle(
+                                color = if (einkMode) Color.Black else primaryColor,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            transformedToSource = transformedToSource
+                        )
+                        else -> Unit
+                    }
                 }
                 appendEditorRenderedInline(
                     source = text,
@@ -231,6 +262,7 @@ fun renderMarkdownForEditor(
                     customFontBoldBoost = customFontBoldBoost,
                     boldFontFamily = boldFontFamily,
                     italicFontFamily = italicFontFamily,
+                    cursorOffset = cursorOffset,
                     sourceToTransformed = sourceToTransformed,
                     transformedToSource = transformedToSource
                 )
@@ -255,6 +287,7 @@ fun renderMarkdownForEditor(
                     customFontBoldBoost = customFontBoldBoost,
                     boldFontFamily = boldFontFamily,
                     italicFontFamily = italicFontFamily,
+                    cursorOffset = cursorOffset,
                     sourceToTransformed = sourceToTransformed,
                     transformedToSource = transformedToSource
                 )
@@ -387,6 +420,7 @@ private fun AnnotatedString.Builder.appendEditorRenderedInline(
     customFontBoldBoost: Boolean,
     boldFontFamily: FontFamily?,
     italicFontFamily: FontFamily?,
+    cursorOffset: Int,
     sourceToTransformed: IntArray,
     transformedToSource: MutableList<Int>
 ) {
@@ -402,26 +436,53 @@ private fun AnnotatedString.Builder.appendEditorRenderedInline(
             continue
         }
 
-        hideSourceRange(
-            start + match.markerStart,
-            start + match.markerEnd,
-            sourceToTransformed,
-            length
-        )
-        appendMappedRange(
-            source,
-            start + match.contentStart,
-            start + match.contentEnd,
-            match.contentStyle,
-            sourceToTransformed,
-            transformedToSource
-        )
-        hideSourceRange(
-            start + match.endMarkerStart,
-            start + match.endMarkerEnd,
-            sourceToTransformed,
-            length
-        )
+        if (cursorOffset in (start + match.start)..(start + match.end)) {
+            appendMappedRange(
+                source,
+                start + match.markerStart,
+                start + match.markerEnd,
+                match.markerStyle,
+                sourceToTransformed,
+                transformedToSource
+            )
+            appendMappedRange(
+                source,
+                start + match.contentStart,
+                start + match.contentEnd,
+                match.contentStyle,
+                sourceToTransformed,
+                transformedToSource
+            )
+            appendMappedRange(
+                source,
+                start + match.endMarkerStart,
+                start + match.endMarkerEnd,
+                match.markerStyle,
+                sourceToTransformed,
+                transformedToSource
+            )
+        } else {
+            hideSourceRange(
+                start + match.markerStart,
+                start + match.markerEnd,
+                sourceToTransformed,
+                length
+            )
+            appendMappedRange(
+                source,
+                start + match.contentStart,
+                start + match.contentEnd,
+                match.contentStyle,
+                sourceToTransformed,
+                transformedToSource
+            )
+            hideSourceRange(
+                start + match.endMarkerStart,
+                start + match.endMarkerEnd,
+                sourceToTransformed,
+                length
+            )
+        }
         pos = match.end
     }
 }

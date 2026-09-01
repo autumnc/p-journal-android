@@ -180,7 +180,8 @@ fun EditorScreen(
     val mdAccentColor = MaterialTheme.colorScheme.tertiary
     val mdHighlightBg = if (einkMode) Color(0xFFE8E8E8) else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
 
-    val mdHighlightTransform = remember(editorFont, boldFontFamily, italicFontFamily, mdTextColor, mdMutedColor, mdPrimaryColor, mdAccentColor, mdHighlightBg, einkMode, fontSize, firstLineIndent) {
+    val mdCursorOffset = textState.selection.end.coerceIn(0, textState.text.length)
+    val mdHighlightTransform = remember(editorFont, boldFontFamily, italicFontFamily, mdTextColor, mdMutedColor, mdPrimaryColor, mdAccentColor, mdHighlightBg, einkMode, fontSize, firstLineIndent, mdCursorOffset) {
         VisualTransformation { annotatedString ->
             renderMarkdownForEditor(
                 text = annotatedString.text,
@@ -194,7 +195,8 @@ fun EditorScreen(
                 customFontBoldBoost = editorFont != "default",
                 boldFontFamily = boldFontFamily,
                 italicFontFamily = italicFontFamily,
-                firstLineIndent = firstLineIndent
+                firstLineIndent = firstLineIndent,
+                cursorOffset = mdCursorOffset
             )
         }
     }
